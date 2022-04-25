@@ -22,6 +22,18 @@ Now you are ready to use MAC.
 For the pose graph examples, you will need to install
 [SE-Sync](https://github.com/david-m-rosen/SESync) with Python bindings.
 
+## Reference
+
+If you found this code useful, please cite:
+```
+@article{doherty2022spectral,
+  title={Spectral Measurement Sparsification for Pose-Graph SLAM},
+  author={Doherty, Kevin J and Rosen, David M and Leonard, John J},
+  journal={arXiv preprint arXiv:2203.13897},
+  year={2022}
+}
+```
+
 ## Notes
 
 - Currently `mac.py` assumes that there is at most one candidate edge between
