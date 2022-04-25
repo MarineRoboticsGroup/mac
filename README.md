@@ -5,3 +5,26 @@ MAC is an algorithm for solving the *maximum algebraic connectivity augmentation
 
 ## Getting started
 
+First, get the dependencies (optionally, do this in a virtual environment).
+```bash
+pip install -r requirements.txt
+```
+
+Then install MAC locally with
+```bash
+pip install -e .
+```
+
+Now you are ready to use MAC.
+
+## Running the examples
+
+For the pose graph examples, you will need to install
+[SE-Sync](https://github.com/david-m-rosen/SESync) with Python bindings.
+
+## Notes
+
+- Currently `mac.py` assumes that there is at most one candidate edge between
+  any pair of nodes. If your data includes multiple edges between the same pair
+  of nodes, you can combine the edges into a single edge with weight equal to
+  the sum of the individual edge weights before using MAC.
