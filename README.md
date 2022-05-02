@@ -5,17 +5,30 @@ MAC is an algorithm for solving the *maximum algebraic connectivity augmentation
 
 ## Getting started
 
-First, get the dependencies (optionally, do this in a virtual environment).
-```bash
-pip install -r requirements.txt
-```
-
-Then install MAC locally with
+Install MAC locally with
 ```bash
 pip install -e .
 ```
 
 Now you are ready to use MAC.
+
+### Usage
+
+```python
+from mac.mac import MAC
+from mac.baseline import NaiveGreedy
+
+# Create a MAC instance
+mac = MAC(fixed_edges, candidate_edges, num_nodes)
+
+# Compute an initial guess from greedy solution
+w_init = NaiveGreedy(candidate_edges)
+
+# Solve the maximum algebraic connectivity augmentation problem for 50% edges
+pct_candidates = 0.5
+num_candidates = int(pct_candidates * len(candidate_edges))
+selection = mac.fw_subset(w_init, num_candidates)
+```
 
 ## Running the examples
 
