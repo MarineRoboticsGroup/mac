@@ -1,12 +1,11 @@
 import sys
-import numpy as np
-from utils import read_g2o_file, split_measurements, plot_poses
-from timeit import default_timer as timer
-from fwac import FWAC
-from naive_greedy import NaiveGreedy
-from wafr_greedy import GreedyTree
-import networkx as nx
 import random
+import numpy as np
+import networkx as nx
+from timeit import default_timer as timer
+from mac.mac import MAC
+from mac.baseline import NaiveGreedy
+from mac.utils import read_g2o_file, split_measurements, plot_poses
 
 import matplotlib.pyplot as plt
 plt.rcParams['text.usetex'] = True
@@ -249,8 +248,8 @@ if __name__ == '__main__':
     print(f"\t {len(odom_measurements)} base (odometry) measurements and")
     print(f"\t {len(lc_measurements)} candidate (loop closure) measurements")
 
-    # Make a FWAC Solver
-    fwac = FWAC(odom_measurements, lc_measurements, num_poses)
+    # Make a MAC Solver
+    fwac = MAC(odom_measurements, lc_measurements, num_poses)
 
     # Make a Naive Solver
     greedy = NaiveGreedy(G_lc)
@@ -291,7 +290,7 @@ if __name__ == '__main__':
 
         # Solve the relaxed maximum algebraic connectivity augmentation problem.
         start = timer()
-        result, unrounded, upper = fwac.fw_subset(w_init, num_lc, max_iters=20)
+        result, unrounded, upper = mac.fw_subset(w_init, num_lc, max_iters=20)
         end = timer()
         times.append(end - start)
         # print(result)
@@ -302,9 +301,9 @@ if __name__ == '__main__':
     # Display the algebraic connectivity for each method
     for i in range(len(greedy_results)):
         pct_lc = percent_lc[i]
-        print(f"Greedy AC at {pct_lc * 100.0} % loop closures: {fwac.evaluate_objective(greedy_results[i])}")
-        print(f"Our AC at {pct_lc * 100.0} % loop closures: {fwac.evaluate_objective(results[i])}")
-        print(f"Our unrounded AC at {pct_lc * 100.0} % loop closures: {fwac.evaluate_objective(unrounded_results[i])}")
+        print(f"Greedy AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(greedy_results[i])}")
+        print(f"Our AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(results[i])}")
+        print(f"Our unrounded AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(unrounded_results[i])}")
         print(f"Dual at {pct_lc * 100.0} % loop closures: {upper_bounds[i]}")
 
     #############################
@@ -312,9 +311,9 @@ if __name__ == '__main__':
     #############################
 
     # plot connectivity vs. percent_lc
-    our_objective_vals = [fwac.evaluate_objective(result) for result in results]
-    naive_objective_vals = [fwac.evaluate_objective(greedy_result) for greedy_result in greedy_results]
-    unrounded_objective_vals = [fwac.evaluate_objective(unrounded) for unrounded in unrounded_results]
+    our_objective_vals = [mac.evaluate_objective(result) for result in results]
+    naive_objective_vals = [mac.evaluate_objective(greedy_result) for greedy_result in greedy_results]
+    unrounded_objective_vals = [mac.evaluate_objective(unrounded) for unrounded in unrounded_results]
 
     plt.plot(100.0*np.array(percent_lc), our_objective_vals, label='Ours')
     plt.plot(100.0*np.array(percent_lc), upper_bounds, label='Dual Upper Bound', linestyle='--', color='C0')

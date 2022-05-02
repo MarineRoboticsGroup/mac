@@ -1,4 +1,4 @@
-from utils import *
+from mac.utils import *
 import numpy as np
 import networkx as nx
 import networkx.linalg as la
@@ -12,9 +12,9 @@ from timeit import default_timer as timer
 
 from collections import namedtuple
 
-FWACResult = namedtuple('FWACResult', ['w', 'F_unrounded', 'objective_values', 'duality_gaps'])
+MACResult = namedtuple('MACResult', ['w', 'F_unrounded', 'objective_values', 'duality_gaps'])
 
-class FWAC:
+class MAC:
     def __init__(self, odom_measurements, lc_measurements, num_poses):
         self.L_odom = rotational_weight_graph_lap_from_meas(odom_measurements, num_poses)
         self.num_poses = num_poses
