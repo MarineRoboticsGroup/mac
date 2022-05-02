@@ -377,3 +377,12 @@ def sum_sparse(m):
             # new line
             x[a.nonzero()] += a.data
         return x
+
+
+def select_measurements(measurements, w):
+    assert(len(measurements) == len(w))
+    meas_out = []
+    for i, meas in enumerate(measurements):
+        if w[i] == 1.0:
+            meas_out.append(meas)
+    return meas_out
