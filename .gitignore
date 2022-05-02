@@ -15,6 +15,7 @@ ehthumbs.db
 # Binaries #
 ############
 *.pyc
+*.egg-info
 
 # Latex #
 #########
