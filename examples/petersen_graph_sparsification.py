@@ -5,6 +5,8 @@ from mac.utils import select_measurements, split_measurements, RelativePoseMeasu
 from mac.baseline import NaiveGreedy
 from mac.mac import MAC
 
+plt.rcParams['text.usetex'] = True
+
 def nx_to_rpm(G):
     measurements = []
     for edge in G.edges():
@@ -33,7 +35,7 @@ for i in range(n-1):
         G.add_edge(i, i+1)
 
 print(G)
-pos = nx.shell_layout(G)
+pos = nx.shell_layout(G, nlist=[range(5,10), range(5)])
 nx.draw(G, pos=pos)
 plt.show()
 
@@ -45,7 +47,7 @@ measurements = nx_to_rpm(G)
 # Split chain and non-chain parts
 fixed_meas, candidate_meas = split_measurements(measurements)
 
-pct_candidates = 0.5
+pct_candidates = 0.3
 num_candidates = int(pct_candidates * len(candidate_meas))
 mac = MAC(fixed_meas, candidate_meas, n)
 
@@ -62,9 +64,14 @@ selected_G = rpm_to_nx(fixed_meas + selected)
 print(f"lambda2 Random: {mac.evaluate_objective(w_init)}")
 print(f"lambda2 Ours: {mac.evaluate_objective(result)}")
 
-plt.subplot(121)
+plt.subplot(131)
+nx.draw(G, pos=pos)
+plt.title(rf"Original ($\lambda_2$ = {mac.evaluate_objective(np.ones(len(w_init))):.3f})")
+plt.subplot(132)
 nx.draw(init_selected_G, pos=pos)
-plt.subplot(122)
+plt.title(rf"Naive ($\lambda_2$ = {mac.evaluate_objective(w_init):.3f})")
+plt.subplot(133)
 nx.draw(selected_G, pos=pos)
+plt.title(rf"Ours ($\lambda_2$ = {mac.evaluate_objective(result):.3f})")
 plt.show()
 
