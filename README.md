@@ -50,7 +50,7 @@ In each case, the set of fixed edges is a chain, and the remaining edges are con
 
 ## Pose graph sparsification
 
-For the pose graph examples, you will need to install [SE-Sync](https://github.com/david-m-rosen/SESync) with Python bindings.
+For the pose graph examples, you will need to install [SE-Sync](https://github.com/david-m-rosen/SE-Sync) with Python bindings.
 
 Once that is installed, you need to modify the SE-Sync path in `g2o_experiment.py`.
 
