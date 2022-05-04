@@ -32,8 +32,33 @@ selection = mac.fw_subset(w_init, num_candidates)
 
 ## Running the examples
 
-For the pose graph examples, you will need to install
-[SE-Sync](https://github.com/david-m-rosen/SESync) with Python bindings.
+## Basic examples
+
+From the `examples` directory, run:
+```bash
+python3 random_graph_sparsification.py
+```
+which demonstrates our sparsification approach on an [Erdos-Renyi graph](https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93R%C3%A9nyi_model).
+
+In the same directoy, running:
+```bash
+python3 petersen_graph_sparsification.py
+```
+will show the results of our approach on the [Petersen graph](https://en.wikipedia.org/wiki/Petersen_graph).
+
+In each case, the set of fixed edges is a chain, and the remaining edges are considered candidates.
+
+## Pose graph sparsification
+
+For the pose graph examples, you will need to install [SE-Sync](https://github.com/david-m-rosen/SESync) with Python bindings.
+
+Once that is installed, you need to modify the SE-Sync path in `g2o_experiment.py`.
+
+Finally, run:
+```bash
+python3 g2o_experiment.py [path to .g2o file]
+```
+to run MAC for pose graph sparsification and compute SLAM solutions. Several plots will be saved in the `examples` directory for inspection.
 
 ## Reference
 
