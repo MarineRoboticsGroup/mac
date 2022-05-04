@@ -3,9 +3,12 @@ import random
 import numpy as np
 import networkx as nx
 from timeit import default_timer as timer
+from pose_graph_utils import read_g2o_file, plot_poses
+
+# MAC requirements
 from mac.mac import MAC
 from mac.baseline import NaiveGreedy
-from mac.utils import read_g2o_file, split_measurements, plot_poses
+from mac.utils import split_measurements, RelativePoseMeasurement
 
 import matplotlib.pyplot as plt
 plt.rcParams['text.usetex'] = True
