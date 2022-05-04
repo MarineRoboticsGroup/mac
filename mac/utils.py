@@ -325,13 +325,6 @@ def rotations_from_variable_matrix(xhat):
     n = int(cols / (d + 1))
     return xhat[:, n:(d + 1) * n]
 
-def write_measurements(meas, outfile):
-    # File formatted in ".sesnyc" format as:
-    #  meas.i meas.j meas.tau meas.kappa meas.t(:) meas.R(:)
-
-	return None
-
-
 def split_measurements(measurements):
     """
     Splits list of "measurements" and returns two lists:
@@ -349,35 +342,6 @@ def split_measurements(measurements):
             odom_measurements.append(measurement)
 
     return odom_measurements, lc_measurements
-
-# Sum a set of sparse matrices
-# https://stackoverflow.com/questions/11254248/efficiently-accumulating-a-collection-of-sparse-scipy-matrices
-def sum_sparse_orig(m):
-    x = np.zeros(m[0].shape)
-    for a in m:
-        ri = np.repeat(np.arange(a.shape[0]),np.diff(a.indptr))
-        x[ri,a.indices] += a.data
-    return csr_matrix(x)
-
-# Sum a set of sparse matrices
-# https://stackoverflow.com/questions/11254248/efficiently-accumulating-a-collection-of-sparse-scipy-matrices
-# def sum_sparse_orig(m, w):
-#     x = np.zeros(m[0].shape)
-#     for (a,b) in zip(m,w):
-#         ri = np.repeat(np.arange(a.shape[0]),np.diff(a.indptr))
-#         x[ri,a.indices] += b*a.data
-#     return csr_matrix(x)
-
-def sum_sparse(m):
-        x = np.zeros(m[0].shape,m[0].dtype)
-        for a in m:
-            # old lines
-            #ri = np.repeat(np.arange(a.shape[0]),np.diff(a.indptr))
-            #x[ri,a.indices] += a.data
-            # new line
-            x[a.nonzero()] += a.data
-        return x
-
 
 def select_measurements(measurements, w):
     assert(len(measurements) == len(w))
