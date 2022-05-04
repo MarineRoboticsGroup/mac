@@ -34,34 +34,16 @@ class MAC:
 
     def find_fiedler_pair(self, L, method='tracemin_lu', tol=1e-8):
         assert(method != 'lobpcg') # LOBPCG not supported at the moment
-        # start = timer()
         find_fiedler_func = la.algebraicconnectivity._get_fiedler_func(method)
         x = None
         output = find_fiedler_func(L, x=x, normalized=False, tol=tol, seed=np.random.RandomState(7))
-        # end = timer()
-        # print("scipy Fiedler time: ", end - start)
         return output
 
     def combined_laplacian(self, w, tol=1e-10):
-        start = timer()
         idx = np.where(w > tol)
-        # print(idx)
-        # C1 = sum(laplacian_e * weight for (weight, laplacian_e) in zip(w[idx], self.laplacian_e_list[idx]))
-        # mult = w[idx] * self.laplacian_e_list[idx]
         prod = w[idx]*self.kappas[idx]
-        end = timer()
-        # print("mult time: ", end - start)
-        start = timer()
-        # C1 = sum_sparse_orig(self.laplacian_e_list[idx], w[idx])
-        # C1 = sum_sparse_orig(mult)
         C1 = rotational_weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_poses)
-        # end = timer()
-        # print("Sparse sum time: ", end - start)
-        # print("Rot lap build time: ", end - start)
-        # start = timer()
         C = self.L_odom + C1
-        # end = timer()
-        # print("LAP C time: ", end - start)
         return C
 
     def evaluate_fiedler_pair(self, w, method='tracemin_lu', tol=1e-8):
@@ -72,14 +54,7 @@ class MAC:
         return self.find_fiedler_pair(L)[0]
 
     def grad_from_fiedler(self, fiedler_vec):
-        # start = timer()
-        # grad = np.array([laplacian_e.dot(fiedler_vec).dot(fiedler_vec) for laplacian_e in self.laplacian_e_list])
         grad = np.zeros(len(self.kappas))
-
-        # grad = np.array([self.kappas[k]*(fiedler_vec[self.edge_list[k,0]]**2 +
-        #                                  fiedler_vec[self.edge_list[k,1]]**2 - 2 *
-        #                                  fiedler_vec[self.edge_list[k,0]]*fiedler_vec[self.edge_list[k,1]]) for
-        #                  k in range(len(self.kappas))])
 
         for k in range(len(self.kappas)):
             edge = self.edge_list[k] # get edge (i,j)
@@ -88,15 +63,19 @@ class MAC:
             kappa_k = self.kappas[k]
             kdelta = kappa_k * (v_i - v_j)
             grad[k] = kdelta * (v_i - v_j)
-            # grad[k] = kappa_k * (v_i**2 + v_j**2 - 2.0*v_i*v_j)
-
-        # grad = np.array([self.kappas[]])
-        # grad = grad_from_fiedler_numba(fiedler_vec, self.laplacian_e_list)
-        # end = timer()
-        # print("grad time: ", end - start)
         return grad
 
     def round_solution(self, w, k):
+        """
+        Round a solution w to the relaxed problem, i.e. w \in [0,1]^m, |w| = k to a
+        solution to the original problem with w_i \in {0,1}. Ties between edges
+        are broken arbitrarily.
+
+        w: A solution in the feasible set for the relaxed problem
+        k: The number of edges to select
+
+        returns w': A solution in the feasible set for the original problem
+        """
         idx = np.argpartition(w, -k)[-k:]
         rounded = np.zeros(len(w))
         if k > 0:
@@ -104,6 +83,17 @@ class MAC:
         return rounded
 
     def simple_random_round(self, w, k):
+        """
+        Round a solution w to the relaxed problem, i.e. w \in [0,1]^m, |w| = k to
+        one with hard edge constraints and satisfying the constraint that the
+        expected number of selected edges is equal to k.
+
+        w: A solution in the feasible set for the relaxed problem
+        k: The number of edges to select _in expectation_
+
+        returns w': A solution containing hard edge selections with an expected
+        number of selected edges equal to k.
+        """
         x = np.zeros(len(w))
         for i in range(len(w)):
             r = np.random.rand()
@@ -111,21 +101,40 @@ class MAC:
                 x[i] = 1.0
         return x
 
-    def round_solution_tiebreaker(self, w, k):
-        truncated_w = w.round(decimals=10)
+    def round_solution_tiebreaker(self, w, k, decimal_tol=10):
+        """
+        Round a solution w to the relaxed problem, i.e. w \in [0,1]^m, |w| = k to a
+        solution to the original problem with w_i \in {0,1}. Ties between edges
+        are broken based on the original weight (all else being equal, we
+        prefer edges with larger weight).
+
+        w: A solution in the feasible set for the relaxed problem
+        k: The number of edges to select
+        decimal_tol: tolerance for determining floating point equality of weights w
+
+        returns w': A solution in the feasible set for the original problem
+        """
+        truncated_w = w.round(decimals=decimal_tol)
         zipped_vals = np.array([(truncated_w[i], self.kappas[i]) for i in range(len(w))], dtype=[('weight', 'float'), ('kappa', 'float')])
-        # zipped_vals = np.array([w[i]*self.kappas[i] for i in range(len(w))])
         idx = np.argpartition(zipped_vals, -k, order=['weight', 'kappa'])[-k:]
         rounded = np.zeros(len(w))
         if k > 0:
             rounded[idx] = 1.0
         return rounded
 
-    def fw_subset(self, w_init, k, max_iters=5, duality_gap_tol=1e-8, debug_plot=True, line_search=True):
+    def fw_subset(self, w_init, k, max_iters=5, duality_gap_tol=1e-8):
         """
-        f: Python function to maximize, concave in w
+        Use the Frank-Wolfe method to solve the subset selection problem,.
+
         w_init: Array-like, must satisfy 0 <= w_i <= 1, |w| <= k
         k: size of max allowed subset
+        max_iters: Maximum number of Frank-Wolfe iterations before returning
+        duality_gap_tol: Minimum duality gap (for early stopping)
+
+        returns a tuple (solution, unrounded, upper_bound) where
+        solution: the (rounded) solution w \in {0,1}^m |w| = k
+        unrounded: the solution obtained prior to rounding
+        upper_bound: the value of the dual at the last iteration
         """
         u_i = float("inf")
         w_i = w_init
@@ -142,16 +151,11 @@ class MAC:
 
             # Compute dual upper bound from linear approximation
             # f_i = self.evaluate_objective(w_i)
-            # print(f_i)
             u_i = min(u_i, f_i + grad_i @ (s_i - w_i))
-            # print(u_i)
 
-            # print(f"Duality gap at iteration {it}: {u_i - f_i}")
             # If the duality gap is sufficiently small, we are done
             if u_i - f_i < duality_gap_tol:
                 print("Duality gap tolerance reached, found optimal solution")
-                print("Num unique elements: ", len(np.unique(w_i.round(decimals=5))))
-                print("Num total elements: ", len(w_i))
                 return self.round_solution_tiebreaker(w_i, k), w_i, u_i
                 # return self.simple_random_round(w_i, k), w_i
 
@@ -160,6 +164,4 @@ class MAC:
             w_i = w_i + alpha * (s_i - w_i)
 
         print("Reached maximum iterations")
-        print("Num unique elements: ", len(np.unique(w_i.round(decimals=5))))
-        print("Num total elements: ", len(w_i))
         return self.round_solution_tiebreaker(w_i, k), w_i, u_i
