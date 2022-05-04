@@ -12,27 +12,9 @@ pip install -e .
 
 Now you are ready to use MAC.
 
-### Usage
-
-```python
-from mac.mac import MAC
-from mac.baseline import NaiveGreedy
-
-# Create a MAC instance
-mac = MAC(fixed_edges, candidate_edges, num_nodes)
-
-# Compute an initial guess from greedy solution
-w_init = NaiveGreedy(candidate_edges)
-
-# Solve the maximum algebraic connectivity augmentation problem for 50% edges
-pct_candidates = 0.5
-num_candidates = int(pct_candidates * len(candidate_edges))
-selection = mac.fw_subset(w_init, num_candidates)
-```
-
 ## Running the examples
 
-## Basic examples
+### Basic examples
 
 From the `examples` directory, run:
 ```bash
@@ -48,11 +30,17 @@ will show the results of our approach on the [Petersen graph](https://en.wikiped
 
 In each case, the set of fixed edges is a chain, and the remaining edges are considered candidates.
 
-## Pose graph sparsification
+### Pose graph sparsification
 
-For the pose graph examples, you will need to install [SE-Sync](https://github.com/david-m-rosen/SESync) with Python bindings.
+For the pose graph examples, you will need to install [SE-Sync](https://github.com/david-m-rosen/SE-Sync) with [Python bindings](https://github.com/david-m-rosen/SE-Sync#python).
 
-Once that is installed, you need to modify the SE-Sync path in `g2o_experiment.py`.
+Once that is installed, you need to modify the SE-Sync path in `g2o_experiment.py`:
+
+```python
+# SE-Sync setup
+sesync_lib_path = "/path/to/SESync/C++/build/lib"
+sys.path.insert(0, sesync_lib_path)
+```
 
 Finally, run:
 ```bash
