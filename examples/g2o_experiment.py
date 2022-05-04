@@ -225,20 +225,11 @@ if __name__ == '__main__':
     end = timer()
     print("Success! elapsed time: ", (end - start))
 
-    # Set random seed so trials are deterministic
-    # random.seed(7)
-
     # Split measurements into odom and loop closures
     odom_measurements, lc_measurements = split_measurements(measurements)
 
-    # Randomly shuffle lc_measurements to prevent taking advantage of order in g2o file.
-    # random.shuffle(lc_measurements)
-
-    # We use networkx to compute graph Laplacians, though using scipy directly
-    # would probably be faster
-    # G_odom = nx_rot_G_w(odom_measurements, num_poses)
+    # G_lc currently only used for NaiveGreedy - we should be able to remove this easily
     G_lc = nx_rot_G_w(lc_measurements, num_poses)
-
 
     # G_odom should have a single connected component
     # print([len(c) for c in sorted(nx.connected_components(G_odom), key=len, reverse=True)])
@@ -249,7 +240,7 @@ if __name__ == '__main__':
     print(f"\t {len(lc_measurements)} candidate (loop closure) measurements")
 
     # Make a MAC Solver
-    fwac = MAC(odom_measurements, lc_measurements, num_poses)
+    mac = MAC(odom_measurements, lc_measurements, num_poses)
 
     # Make a Naive Solver
     greedy = NaiveGreedy(G_lc)
@@ -259,11 +250,7 @@ if __name__ == '__main__':
     #############################
 
     # Test between 100% and 0% loop closures
-    # percent_lc = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
     percent_lc = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    # percent_lc = np.linspace(0.01, 1.0, num=30, endpoint=True)
-    # percent_lc = [0.0]
-    # percent_lc = [1.0, 0.9]
 
     # Containers for results
     results = []
@@ -282,18 +269,13 @@ if __name__ == '__main__':
         greedy_result = greedy.subset(num_lc)
         greedy_results.append(greedy_result)
 
-        # Alternatively (k/m) in each slot
-        # w_init = (num_lc / len(lc_measurements)) * np.ones(len(lc_measurements))
-
         w_init = greedy_result
-        # print(w_init)
 
         # Solve the relaxed maximum algebraic connectivity augmentation problem.
         start = timer()
         result, unrounded, upper = mac.fw_subset(w_init, num_lc, max_iters=20)
         end = timer()
         times.append(end - start)
-        # print(result)
         results.append(result)
         upper_bounds.append(upper)
         unrounded_results.append(unrounded)
@@ -332,7 +314,6 @@ if __name__ == '__main__':
     plt.ylabel(r'Time (s)')
     plt.xlabel(r'\% Edges Added')
     plt.savefig(f"comp_time_{dataset_name}.png", dpi=600, bbox_inches='tight')
-    # plt.title('Computation times')
     plt.show()
 
     #############################
@@ -426,11 +407,6 @@ if __name__ == '__main__':
         print(f"Naive full cost: {naive_full_cost}")
         print(f"Naive SO orbdist: {naive_SOd_orbdist}")
 
-    # plt.subplot(131)
-    # plt.title('Rotation Cost')
-    # plt.legend()
-
-
     plt.figure()
     plt.semilogy(100.0*np.array(percent_lc), our_full_costs, label='Ours')
     plt.semilogy(100.0*np.array(percent_lc), naive_full_costs, label='Naive Method', color='red', linestyle='-.')
@@ -466,6 +442,4 @@ if __name__ == '__main__':
 
     print("Naive rotation cost: ", evaluate_sesync_rotation_objective(LGrho, xhat[:, num_poses:]))
     print("Naive cost: ", evaluate_sesync_objective(M, xhat))
-
-    # print("Greedy orbit: ", evaluate_sesync_objective(M, xhat))
 
