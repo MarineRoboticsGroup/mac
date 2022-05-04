@@ -38,7 +38,7 @@ For the pose graph examples, you will need to install
 ## Reference
 
 If you found this code useful, please cite:
-```
+```bibtex
 @article{doherty2022spectral,
   title={Spectral Measurement Sparsification for Pose-Graph SLAM},
   author={Doherty, Kevin J and Rosen, David M and Leonard, John J},
