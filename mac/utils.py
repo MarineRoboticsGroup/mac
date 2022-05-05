@@ -2,6 +2,7 @@ import numpy as np
 from collections import namedtuple
 import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix, coo_matrix
+import networkx as nx
 
 import numba
 from numba import jit
