@@ -1,28 +1,11 @@
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from mac.utils import select_measurements, split_measurements, RelativePoseMeasurement
+from mac.utils import select_measurements, split_measurements, nx_to_mac, mac_to_nx
 from mac.baseline import NaiveGreedy
 from mac.mac import MAC
 
 plt.rcParams['text.usetex'] = True
-
-def nx_to_rpm(G):
-    measurements = []
-    for edge in G.edges():
-        t = np.zeros(3)
-        R = np.eye(3)
-        meas = RelativePoseMeasurement(edge[0], edge[1], t, R, 1.0, 1.0)
-        measurements.append(meas)
-    return measurements
-
-
-def rpm_to_nx(measurements):
-    G = nx.Graph()
-    for meas in measurements:
-        G.add_edge(meas.i, meas.j, weight=meas.kappa)
-    return G
-
 
 G = nx.petersen_graph()
 n = len(G.nodes())
@@ -42,7 +25,7 @@ plt.show()
 # Ensure G is connected before proceeding
 assert(nx.is_connected(G))
 
-measurements = nx_to_rpm(G)
+measurements = nx_to_mac(G)
 
 # Split chain and non-chain parts
 fixed_meas, candidate_meas = split_measurements(measurements)
@@ -58,8 +41,8 @@ result, rounded, upper = mac.fw_subset(w_init, num_candidates, max_iters=50)
 init_selected = select_measurements(candidate_meas, w_init)
 selected = select_measurements(candidate_meas, result)
 
-init_selected_G = rpm_to_nx(fixed_meas + init_selected)
-selected_G = rpm_to_nx(fixed_meas + selected)
+init_selected_G = mac_to_nx(fixed_meas + init_selected)
+selected_G = mac_to_nx(fixed_meas + selected)
 
 print(f"lambda2 Random: {mac.evaluate_objective(w_init)}")
 print(f"lambda2 Ours: {mac.evaluate_objective(result)}")

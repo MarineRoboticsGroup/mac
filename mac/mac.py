@@ -16,20 +16,20 @@ MACResult = namedtuple('MACResult', ['w', 'F_unrounded', 'objective_values', 'du
 
 class MAC:
     def __init__(self, odom_measurements, lc_measurements, num_poses):
-        self.L_odom = rotational_weight_graph_lap_from_meas(odom_measurements, num_poses)
+        self.L_odom = weight_graph_lap_from_edge_list(odom_measurements, num_poses)
         self.num_poses = num_poses
         self.laplacian_e_list = []
-        self.kappas = []
+        self.weights = []
         self.edge_list = []
 
         for meas in lc_measurements:
-            laplacian_e = rotational_weight_graph_lap_from_meas([meas], num_poses)
+            laplacian_e = weight_graph_lap_from_edge_list([meas], num_poses)
             self.laplacian_e_list.append(laplacian_e)
-            self.kappas.append(meas.kappa)
+            self.weights.append(meas.weight)
             self.edge_list.append((meas.i,meas.j))
 
         self.laplacian_e_list = np.array(self.laplacian_e_list)
-        self.kappas = np.array(self.kappas)
+        self.weights = np.array(self.weights)
         self.edge_list = np.array(self.edge_list)
 
     def find_fiedler_pair(self, L, method='tracemin_lu', tol=1e-8):
@@ -66,7 +66,7 @@ class MAC:
         returns the matrix L(w)
         """
         idx = np.where(w > tol)
-        prod = w[idx]*self.kappas[idx]
+        prod = w[idx]*self.weights[idx]
         C1 = rotational_weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_poses)
         C = self.L_odom + C1
         return C
@@ -113,14 +113,14 @@ class MAC:
 
         returns grad F(w) from equation (8) of our paper: https://arxiv.org/pdf/2203.13897.pdf.
         """
-        grad = np.zeros(len(self.kappas))
+        grad = np.zeros(len(self.weights))
 
-        for k in range(len(self.kappas)):
+        for k in range(len(self.weights)):
             edge = self.edge_list[k] # get edge (i,j)
             v_i = fiedler_vec[edge[0]]
             v_j = fiedler_vec[edge[1]]
-            kappa_k = self.kappas[k]
-            kdelta = kappa_k * (v_i - v_j)
+            weight_k = self.weights[k]
+            kdelta = weight_k * (v_i - v_j)
             grad[k] = kdelta * (v_i - v_j)
         return grad
 
@@ -174,8 +174,8 @@ class MAC:
         returns w': A solution in the feasible set for the original problem
         """
         truncated_w = w.round(decimals=decimal_tol)
-        zipped_vals = np.array([(truncated_w[i], self.kappas[i]) for i in range(len(w))], dtype=[('weight', 'float'), ('kappa', 'float')])
-        idx = np.argpartition(zipped_vals, -k, order=['weight', 'kappa'])[-k:]
+        zipped_vals = np.array([(truncated_w[i], self.weights[i]) for i in range(len(w))], dtype=[('w', 'float'), ('weight', 'float')])
+        idx = np.argpartition(zipped_vals, -k, order=['w', 'weight'])[-k:]
         rounded = np.zeros(len(w))
         if k > 0:
             rounded[idx] = 1.0

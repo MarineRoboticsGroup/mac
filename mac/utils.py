@@ -6,9 +6,50 @@ from scipy.sparse import csr_matrix, coo_matrix
 import numba
 from numba import jit
 
-# Define RelativePoseMeasurement container
-RelativePoseMeasurement = namedtuple('RelativePoseMeasurement',
-                                     ['i', 'j', 't', 'R', 'kappa', 'tau'])
+# Define Edge container
+Edge = namedtuple('Edge', ['i', 'j', 'weight'])
+
+def nx_to_mac(G):
+    edges = []
+    for nxedge in G.edges():
+        edge = Edge(nxedge[0], nxedge[1], 1.0)
+        edges.append(edge)
+    return edges
+
+def mac_to_nx(edges):
+    G = nx.Graph()
+    for edge in edges:
+        G.add_edge(edge.i, edge.j, weight=edge.weight)
+    return G
+
+def weight_graph_lap_from_edge_list(edges, num_vars):
+    # Preallocate triplets
+    rows = []
+    cols = []
+    data = []
+    for edge in edges:
+        # Diagonal elem (u,u)
+        rows.append(edge.i)
+        cols.append(edge.i)
+        data.append(edge.weight)
+
+        # Diagonal elem (v,v)
+        rows.append(edge.j)
+        cols.append(edge.j)
+        data.append(edge.weight)
+
+        # Off diagonal (u,v)
+        rows.append(edge.i)
+        cols.append(edge.j)
+        data.append(-edge.weight)
+
+        # Off diagonal (v,u)
+        rows.append(edge.j)
+        cols.append(edge.i)
+        data.append(-edge.weight)
+
+    return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_vars, num_vars]))
+
 
 def rotational_weight_graph_lap_from_meas(measurements, num_poses):
     # Preallocate triplets

@@ -2,7 +2,11 @@ import numpy as np
 from collections import namedtuple
 import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix, coo_matrix
-from mac.utils import RelativePoseMeasurement
+from mac.utils import Edge
+
+# Define RelativePoseMeasurement container
+RelativePoseMeasurement = namedtuple('RelativePoseMeasurement',
+                                     ['i', 'j', 't', 'R', 'kappa', 'tau'])
 
 def rot2D_from_theta(theta):
     """
@@ -249,3 +253,26 @@ def rotations_from_variable_matrix(xhat):
     d, cols = xhat.shape
     n = int(cols / (d + 1))
     return xhat[:, n:(d + 1) * n]
+
+def rpm_to_mac(measurements):
+    edges = []
+    for meas in measurements:
+        edge = Edge(meas.i, meas.j, meas.kappa)
+        edges.append(edge)
+    return edges
+
+def nx_to_rpm(G):
+    measurements = []
+    for edge in G.edges():
+        t = np.zeros(3)
+        R = np.eye(3)
+        meas = RelativePoseMeasurement(edge[0], edge[1], t, R, 1.0, 1.0)
+        measurements.append(meas)
+    return measurements
+
+
+def rpm_to_nx(measurements):
+    G = nx.Graph()
+    for meas in measurements:
+        G.add_edge(meas.i, meas.j, weight=meas.kappa)
+    return G

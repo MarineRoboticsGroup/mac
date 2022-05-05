@@ -3,12 +3,12 @@ import random
 import numpy as np
 import networkx as nx
 from timeit import default_timer as timer
-from pose_graph_utils import read_g2o_file, plot_poses
+from pose_graph_utils import read_g2o_file, plot_poses, rpm_to_mac, RelativePoseMeasurement
 
 # MAC requirements
 from mac.mac import MAC
 from mac.baseline import NaiveGreedy
-from mac.utils import split_measurements, RelativePoseMeasurement
+from mac.utils import split_measurements, Edge
 
 import matplotlib.pyplot as plt
 plt.rcParams['text.usetex'] = True
@@ -243,7 +243,7 @@ if __name__ == '__main__':
     print(f"\t {len(lc_measurements)} candidate (loop closure) measurements")
 
     # Make a MAC Solver
-    mac = MAC(odom_measurements, lc_measurements, num_poses)
+    mac = MAC(rpm_to_mac(odom_measurements), rpm_to_mac(lc_measurements), num_poses)
 
     # Make a Naive Solver
     greedy = NaiveGreedy(G_lc)
