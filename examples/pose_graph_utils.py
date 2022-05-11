@@ -174,7 +174,7 @@ def quat2rot(q: Union[np.ndarray, List]) -> np.ndarray:
     R[2,2] = -qx**2 -qy**2 + qz**2 + qw**2
     return R
 
-def read_g2o_file(filename: str) -> Tuple[List[RelativePoseMeasurement], int]
+def read_g2o_file(filename: str) -> Tuple[List[RelativePoseMeasurement], int]:
     """
     Parses the file with path `filename`, interpreting it as a g2o file and
     returning the set of measurements it contains and the number of poses
