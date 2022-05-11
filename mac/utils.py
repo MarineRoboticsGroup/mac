@@ -120,7 +120,7 @@ def rotational_weight_graph_lap_from_meas(measurements: List, num_poses: int) ->
 # TODO @kevin is there a reason why the kappas are passed in separately as
 # opposed to using the weights that are a part of the Edge namedtuple? If so,
 # maybe we should clarify why
-def rotational_weight_graph_lap_from_edges(edges: List[Edge], kappas: List[int], num_poses: int) -> csr_matrix:
+def weight_graph_lap_from_edges(edges: List[Edge], kappas: List[int], num_poses: int) -> csr_matrix:
     """Returns the sparse rotational weighted graph Laplacian matrix from a list
     of edges and edge weights
 
@@ -140,22 +140,22 @@ def rotational_weight_graph_lap_from_edges(edges: List[Edge], kappas: List[int],
         # Diagonal elem (u,u)
         rows.append(edges[i, 0])
         cols.append(edges[i, 0])
-        data.append(kappas[i])
+        data.append(weights[i])
 
         # Diagonal elem (v,v)
         rows.append(edges[i, 1])
         cols.append(edges[i, 1])
-        data.append(kappas[i])
+        data.append(weights[i])
 
         # Off diagonal (u,v)
         rows.append(edges[i, 0])
         cols.append(edges[i, 1])
-        data.append(-kappas[i])
+        data.append(-weights[i])
 
         # Off diagonal (v,u)
         rows.append(edges[i, 1])
         cols.append(edges[i, 0])
-        data.append(-kappas[i])
+        data.append(-weights[i])
 
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_poses, num_poses]))
 
