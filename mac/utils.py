@@ -51,7 +51,6 @@ def weight_graph_lap_from_edge_list(edges, num_vars):
 
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_vars, num_vars]))
 
-
 def rotational_weight_graph_lap_from_meas(measurements, num_poses):
     # Preallocate triplets
     rows = []
@@ -80,7 +79,7 @@ def rotational_weight_graph_lap_from_meas(measurements, num_poses):
 
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_poses, num_poses]))
 
-def rotational_weight_graph_lap_from_edges(edges, kappas, num_poses):
+def weight_graph_lap_from_edges(edges, weights, num_poses):
     # Preallocate triplets
     rows = []
     cols = []
@@ -89,22 +88,22 @@ def rotational_weight_graph_lap_from_edges(edges, kappas, num_poses):
         # Diagonal elem (u,u)
         rows.append(edges[i, 0])
         cols.append(edges[i, 0])
-        data.append(kappas[i])
+        data.append(weights[i])
 
         # Diagonal elem (v,v)
         rows.append(edges[i, 1])
         cols.append(edges[i, 1])
-        data.append(kappas[i])
+        data.append(weights[i])
 
         # Off diagonal (u,v)
         rows.append(edges[i, 0])
         cols.append(edges[i, 1])
-        data.append(-kappas[i])
+        data.append(-weights[i])
 
         # Off diagonal (v,u)
         rows.append(edges[i, 1])
         cols.append(edges[i, 0])
-        data.append(-kappas[i])
+        data.append(-weights[i])
 
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_poses, num_poses]))
 

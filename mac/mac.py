@@ -67,7 +67,7 @@ class MAC:
         """
         idx = np.where(w > tol)
         prod = w[idx]*self.weights[idx]
-        C1 = rotational_weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_poses)
+        C1 = weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_poses)
         C = self.L_odom + C1
         return C
 
