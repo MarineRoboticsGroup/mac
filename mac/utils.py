@@ -8,8 +8,6 @@ from typing import List
 import numba
 from numba import jit
 
-from pose_graph_utils import RelativePoseMeasurement
-
 # Define Edge container
 Edge = namedtuple('Edge', ['i', 'j', 'weight'])
 
