@@ -8,6 +8,10 @@
 ehthumbs.db
 [Tt]humbs.db
 
+# VS Code generated files #
+##########################
+.vscode/
+
 # Jupyter Notebooks #
 #####################
 .ipynb_checkpoints
