@@ -30,15 +30,14 @@ def rot2D_from_theta(theta: float) -> np.ndarray:
     return np.array([[c, -s], [s, c]])
 
 
-# TODO @kevin what is the type of `poses`? Is it list of np.ndarray?
-def se2poses_to_x(poses) -> np.ndarray:
+def se2poses_to_x(poses: List[np.ndarray]) -> np.ndarray:
     """
     Takes list of N SE(2) poses and returns a numpy array formatted as:
     [R1 R2 R3 ... RN t1 t2 t3 ... tN]
     where Ri is a matrix in SO(2) and ti is a 2D vector
 
     Args:
-        poses (??): List of SE(2) poses.
+        poses List[np.ndarray]: List of SE(2) poses.
 
     Returns:
         np.ndarray: Numpy array of SE(2) poses.
@@ -53,8 +52,7 @@ def se2poses_to_x(poses) -> np.ndarray:
     return X
 
 
-# TODO @kevin what is the type of `pose`? Is it np.ndarray?
-def Rt_from_pose(pose) -> Tuple[np.ndarray, np.ndarray]:
+def Rt_from_pose(pose: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Returns the rotation matrix and translation vector from a pose.
 
@@ -64,7 +62,7 @@ def Rt_from_pose(pose) -> Tuple[np.ndarray, np.ndarray]:
     Returns:
         Tuple[np.ndarray, np.ndarray]: Tuple containing the rotation matrix and translation vector.
     """
-    # TODO should have an assert that the pose is 2D (matrix is correctly shaped)
+    assert(pose.shape[0] == pose.shape[1] == 3)
 
     Xmat = se2poses_to_x([pose])
     return rotations_from_variable_matrix(Xmat), translations_from_variable_matrix(Xmat)
@@ -178,10 +176,6 @@ def read_g2o_file(filename: str) -> Tuple[List[RelativePoseMeasurement], int]:
     """
     Parses the file with path `filename`, interpreting it as a g2o file and
     returning the set of measurements it contains and the number of poses
-    Only works with 2D problems. 3D pose graph parsing is not implemented, but
-    can be without too much trouble
-
-    # TODO @kevin it seems like you now have 3D pose graphs, so this should be updated?
 
     Args:
         filename (str): Path to the g2o file.
@@ -313,7 +307,6 @@ def translations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
 
 def rotations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
     """Returns the columns associated with rotations in the variable matrix
-    #TODO @kevin: check that the above statement is correct
 
     Args:
         xhat (np.ndarray): the variable matrix
@@ -324,8 +317,6 @@ def rotations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
     d, cols = xhat.shape
     n = int(cols / (d + 1))
 
-    # TODO if we are just going from 'n' to end of matrix it might be cleaner to
-    # just write `xhat[:, n:]`
     return xhat[:, n:(d + 1) * n]
 
 def rpm_to_mac(measurements: List[RelativePoseMeasurement]) -> List[Edge]:
@@ -344,17 +335,6 @@ def rpm_to_mac(measurements: List[RelativePoseMeasurement]) -> List[Edge]:
         edge = Edge(meas.i, meas.j, meas.kappa)
         edges.append(edge)
     return edges
-
-#TODO @kevin: is this dead code? It looks like the function is unfinished
-def nx_to_rpm(G: nx.Graph) -> List[RelativePoseMeasurement]:
-    measurements = []
-    for edge in G.edges():
-        t = np.zeros(3)
-        R = np.eye(3)
-        meas = RelativePoseMeasurement(edge[0], edge[1], t, R, 1.0, 1.0)
-        measurements.append(meas)
-    return measurements
-
 
 def rpm_to_nx(measurements: List[RelativePoseMeasurement]) -> nx.Graph:
     """Convert a list of relative pose measurements into a networkx graph

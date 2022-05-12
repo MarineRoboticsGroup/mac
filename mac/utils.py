@@ -77,56 +77,13 @@ def weight_graph_lap_from_edge_list(edges: List[Edge], num_vars: int) -> csr_mat
 
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_vars, num_vars]))
 
-
-# TODO @kevin is this dead code? It seems to be referencing the
-# RelativePoseMeasurement class
-def rotational_weight_graph_lap_from_meas(measurements: List, num_poses: int) -> csr_matrix:
-    """Returns the sparse rotational weighted graph Laplacian matrix from a list of measurements
-
-    Args:
-        measurements (List): the list of measurements
-        num_poses (int): the number of poses
-
-    Returns:
-        csr_matrix: the rotational weighted graph Laplacian matrix
-    """
-    # Preallocate triplets
-    rows = []
-    cols = []
-    data = []
-    for meas in measurements:
-        # Diagonal elem (u,u)
-        rows.append(meas.i)
-        cols.append(meas.i)
-        data.append(meas.kappa)
-
-        # Diagonal elem (v,v)
-        rows.append(meas.j)
-        cols.append(meas.j)
-        data.append(meas.kappa)
-
-        # Off diagonal (u,v)
-        rows.append(meas.i)
-        cols.append(meas.j)
-        data.append(-meas.kappa)
-
-        # Off diagonal (v,u)
-        rows.append(meas.j)
-        cols.append(meas.i)
-        data.append(-meas.kappa)
-
-    return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_poses, num_poses]))
-
-# TODO @kevin is there a reason why the kappas are passed in separately as
-# opposed to using the weights that are a part of the Edge namedtuple? If so,
-# maybe we should clarify why
-def weight_graph_lap_from_edges(edges: List[Edge], kappas: List[int], num_poses: int) -> csr_matrix:
+def weight_graph_lap_from_edges(edges: List[Edge], weights: List[int], num_poses: int) -> csr_matrix:
     """Returns the sparse rotational weighted graph Laplacian matrix from a list
     of edges and edge weights
 
     Args:
         edges (List[Edge]): the list of edges
-        kappas (List[int]): the list of edge weights
+        weights (List[float]): the list of edge weights
         num_poses (int): the number of poses
 
     Returns:
@@ -159,8 +116,6 @@ def weight_graph_lap_from_edges(edges: List[Edge], kappas: List[int], num_poses:
 
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_poses, num_poses]))
 
-# TODO @kevin this also seems to be referencing the RelativePoseMeasurement
-# class. Maybe we should clarify why?
 def split_measurements(measurements):
     """
     Splits list of "measurements" and returns two lists:
@@ -179,9 +134,11 @@ def split_measurements(measurements):
 
     return odom_measurements, lc_measurements
 
-# TODO @kevin this also seems to be referencing the RelativePoseMeasurement
-# class. Maybe we should clarify why?
 def select_measurements(measurements, w):
+    """
+    Select the subset of edges from `measurements` with weight equal to one in
+    `w`.
+    """
     assert(len(measurements) == len(w))
     meas_out = []
     for i, meas in enumerate(measurements):
