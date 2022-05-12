@@ -2,13 +2,15 @@ import numpy as np
 from collections import namedtuple
 import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix, coo_matrix
+from typing import List, Tuple, Union
+import networkx as nx
 from mac.utils import Edge
 
 # Define RelativePoseMeasurement container
 RelativePoseMeasurement = namedtuple('RelativePoseMeasurement',
                                      ['i', 'j', 't', 'R', 'kappa', 'tau'])
 
-def rot2D_from_theta(theta):
+def rot2D_from_theta(theta: float) -> np.ndarray:
     """
     Simply builds a 2D rotation matrix:
 
@@ -17,16 +19,28 @@ def rot2D_from_theta(theta):
 
     from a floating point angle `theta`.
 
+    Args:
+        theta (float): Angle in radians.
+
+    Returns:
+        np.ndarray: 2D rotation matrix.
     """
     c = np.cos(theta)
     s = np.sin(theta)
     return np.array([[c, -s], [s, c]])
 
-def se2poses_to_x(poses):
+
+def se2poses_to_x(poses: List[np.ndarray]) -> np.ndarray:
     """
     Takes list of N SE(2) poses and returns a numpy array formatted as:
     [R1 R2 R3 ... RN t1 t2 t3 ... tN]
     where Ri is a matrix in SO(2) and ti is a 2D vector
+
+    Args:
+        poses List[np.ndarray]: List of SE(2) poses.
+
+    Returns:
+        np.ndarray: Numpy array of SE(2) poses.
     """
     d = 2
     N = len(poses)
@@ -37,11 +51,34 @@ def se2poses_to_x(poses):
         X[:,(offset + i*d):(offset + i*d + d)] = pose[:d, :d]
     return X
 
-def Rt_from_pose(pose):
+
+def Rt_from_pose(pose: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Returns the rotation matrix and translation vector from a pose.
+
+    Args:
+        pose (np.ndarray): Pose matrix.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Tuple containing the rotation matrix and translation vector.
+    """
+    assert(pose.shape[0] == pose.shape[1] == 3)
+
     Xmat = se2poses_to_x([pose])
     return rotations_from_variable_matrix(Xmat), translations_from_variable_matrix(Xmat)
 
-def plot_poses(xhat, measurements, show=True, color='b', alpha=0.25):
+def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
+                show: bool=True, color: str='b', alpha: float=0.25) -> None:
+    """Plots the edges indicated by the given measurements, with node vertices
+    determined by xhat. In english: plots the estimated pose graph.
+
+    Args:
+        xhat (np.ndarray): the variable matrix containing the poses to plot
+        measurements (List[RelativePoseMeasurement]): the list of measurements
+        show (bool, optional): whether to plot now. Defaults to True.
+        color (str, optional): the plotting color of the measurements. Defaults to 'b'.
+        alpha (float, optional): transparency. Defaults to 0.25.
+    """
     fig = plt.figure()
     t_hat = translations_from_variable_matrix(xhat)
     Rhat = rotations_from_variable_matrix(xhat)
@@ -104,9 +141,15 @@ def plot_poses(xhat, measurements, show=True, color='b', alpha=0.25):
         plt.show()
 
 
-def quat2rot(q):
+def quat2rot(q: Union[np.ndarray, List]) -> np.ndarray:
     """
     Converts a quaternion q = [qw, qx, qy, qz] to a 3D rotation matrix
+
+    Args:
+        q (Union[np.ndarray, List]): Quaternion to convert.
+
+    Returns:
+        np.ndarray: 3D rotation matrix.
     """
 
     s = np.zeros(4)
@@ -129,12 +172,17 @@ def quat2rot(q):
     R[2,2] = -qx**2 -qy**2 + qz**2 + qw**2
     return R
 
-def read_g2o_file(filename: str):
+def read_g2o_file(filename: str) -> Tuple[List[RelativePoseMeasurement], int]:
     """
     Parses the file with path `filename`, interpreting it as a g2o file and
     returning the set of measurements it contains and the number of poses
-    Only works with 2D problems. 3D pose graph parsing is not implemented, but
-    can be without too much trouble
+
+    Args:
+        filename (str): Path to the g2o file.
+
+    Returns:
+        Tuple[List[RelativePoseMeasurement], int]: A tuple containing the list
+        of measurements and the number of poses in the file.
     """
     measurements = []
     with open(filename, 'r') as infile:
@@ -242,36 +290,63 @@ def read_g2o_file(filename: str):
 
     return measurements, num_poses
 
-def translations_from_variable_matrix(xhat):
+def translations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
+    """extracts the translations from the variable matrix xhat
+
+    Args:
+        xhat (np.ndarray): the variable matrix
+
+    Returns:
+        np.ndarray: the translations stacked on top of each other
+    """
     d, cols = xhat.shape
     n = int(cols / (d + 1))
     print(n)
     return xhat[:, 0:n]
 
 
-def rotations_from_variable_matrix(xhat):
+def rotations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
+    """Returns the columns associated with rotations in the variable matrix
+
+    Args:
+        xhat (np.ndarray): the variable matrix
+
+    Returns:
+        np.ndarray: the rotations stacked on top of each other
+    """
     d, cols = xhat.shape
     n = int(cols / (d + 1))
+
     return xhat[:, n:(d + 1) * n]
 
-def rpm_to_mac(measurements):
+def rpm_to_mac(measurements: List[RelativePoseMeasurement]) -> List[Edge]:
+    """Converts a list of relative pose measurements into a list of edges of a
+    graph weighted by the rotation measurement concentration parameters (kappas)
+    of the measurements.
+
+    Args:
+        measurements (List[RelativePoseMeasurement]): the list of relative pose measurements
+
+    Returns:
+        List[Edge]: the list of edges
+    """
     edges = []
     for meas in measurements:
         edge = Edge(meas.i, meas.j, meas.kappa)
         edges.append(edge)
     return edges
 
-def nx_to_rpm(G):
-    measurements = []
-    for edge in G.edges():
-        t = np.zeros(3)
-        R = np.eye(3)
-        meas = RelativePoseMeasurement(edge[0], edge[1], t, R, 1.0, 1.0)
-        measurements.append(meas)
-    return measurements
+def rpm_to_nx(measurements: List[RelativePoseMeasurement]) -> nx.Graph:
+    """Convert a list of relative pose measurements into a networkx graph
+    weighted by the rotation measurement concentration parameters (kappas)
+    of the measurements.
 
+    Args:
+        measurements (List[RelativePoseMeasurement]): the list of relative pose measurements
 
-def rpm_to_nx(measurements):
+    Returns:
+        nx.Graph: the graph
+    """
     G = nx.Graph()
     for meas in measurements:
         G.add_edge(meas.i, meas.j, weight=meas.kappa)

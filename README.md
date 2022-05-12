@@ -22,7 +22,7 @@ python3 random_graph_sparsification.py
 ```
 which demonstrates our sparsification approach on an [Erdos-Renyi graph](https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93R%C3%A9nyi_model).
 
-In the same directoy, running:
+In the same directory, running:
 ```bash
 python3 petersen_graph_sparsification.py
 ```
