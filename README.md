@@ -53,7 +53,7 @@ to run MAC for pose graph sparsification and compute SLAM solutions. Several plo
 If you found this code useful, please cite our paper [here](https://arxiv.org/abs/2203.13897):
 ```bibtex
 @article{doherty2022spectral,
-  title={Spectral Measurement Sparsification for Pose-Graph SLAM},
+  title={Spectral {M}easurement {S}parsification for {P}ose-{G}raph {SLAM}},
   author={Doherty, Kevin J and Rosen, David M and Leonard, John J},
   journal={arXiv preprint arXiv:2203.13897},
   year={2022}
