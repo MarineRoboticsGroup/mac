@@ -1,7 +1,7 @@
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from mac.utils import select_measurements, split_measurements, Edge, nx_to_mac, mac_to_nx
+from mac.utils import select_edges, split_edges, Edge, nx_to_mac, mac_to_nx
 from mac.baseline import NaiveGreedy
 from mac.mac import MAC
 
@@ -23,24 +23,24 @@ plt.show()
 # Ensure G is connected before proceeding
 assert(nx.is_connected(G))
 
-measurements = nx_to_mac(G)
+edges = nx_to_mac(G)
 
 # Split chain and non-chain parts
-fixed_meas, candidate_meas = split_measurements(measurements)
+fixed_edges, candidate_edges = split_edges(edges)
 
 pct_candidates = 0.1
-num_candidates = int(pct_candidates * len(candidate_meas))
-mac = MAC(fixed_meas, candidate_meas, n)
+num_candidates = int(pct_candidates * len(candidate_edges))
+mac = MAC(fixed_edges, candidate_edges, n)
 
-w_init = np.zeros(len(candidate_meas))
+w_init = np.zeros(len(candidate_edges))
 w_init[:num_candidates] = 1.0
 
 result, rounded, upper = mac.fw_subset(w_init, num_candidates, max_iters=50)
-init_selected = select_measurements(candidate_meas, w_init)
-selected = select_measurements(candidate_meas, result)
+init_selected = select_edges(candidate_edges, w_init)
+selected = select_edges(candidate_edges, result)
 
-init_selected_G = mac_to_nx(fixed_meas + init_selected)
-selected_G = mac_to_nx(fixed_meas + selected)
+init_selected_G = mac_to_nx(fixed_edges + init_selected)
+selected_G = mac_to_nx(fixed_edges + selected)
 
 print(f"lambda2 Random: {mac.evaluate_objective(w_init)}")
 print(f"lambda2 Ours: {mac.evaluate_objective(result)}")
