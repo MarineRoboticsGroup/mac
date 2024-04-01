@@ -43,6 +43,8 @@ python3 -m unittest
 ```
 from the project root directory.
 
+**Note**: Many tests do use scikit-sparse, which is not installed by default. You can see some instructions on how to install it in the [Baseline methods](#baseline-methods) section.
+
 ## Running the examples
 
 ### Basic examples
@@ -90,6 +92,8 @@ You then need to explicitly provide the path to suite-sparse in your call to pip
 ```bash
 SUITESPARSE_INCLUDE_DIR=/usr/local/Cellar/suite-sparse/7.0.1/include SUITESPARSE_LIBRARY_DIR=/usr/local/Cellar/suite-sparse/7.0.1/lib pip3 install scikit-sparse
 ```
+
+You may also be able to install `scikit-sparse` entirely over `conda`. See these [instructions](https://scikit-sparse.readthedocs.io/en/latest/overview.html#installation) for more details.
 
 ## Reference
 
