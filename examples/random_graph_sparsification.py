@@ -18,6 +18,7 @@ for i in range(n-1):
 
 print(G)
 nx.draw(G)
+plt.title("Original Graph")
 plt.show()
 
 # Ensure G is connected before proceeding
@@ -47,7 +48,9 @@ print(f"lambda2 Ours: {mac.evaluate_objective(result)}")
 
 plt.subplot(121)
 nx.draw(init_selected_G)
+plt.title(f"Random Selection\n$\lambda_2$ = {mac.evaluate_objective(w_init):.2f}")
 plt.subplot(122)
 nx.draw(selected_G)
+plt.title(f"Ours\n$\lambda_2$ = {mac.evaluate_objective(result):.2f}")
 plt.show()
 
