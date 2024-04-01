@@ -39,7 +39,7 @@ Now you are ready to use MAC.
 
 You can run unit and regression tests for MAC by simply running:
 ```bash
-python3 unittest -m
+python3 -m unittest
 ```
 from the project root directory.
 
