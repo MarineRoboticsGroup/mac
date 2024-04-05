@@ -8,7 +8,7 @@ from pose_graph_utils import read_g2o_file, plot_poses, rpm_to_mac, RelativePose
 # MAC requirements
 from mac import MAC
 from mac.baseline import NaiveGreedy
-from mac.utils import split_edges, Edge, madow_round, pipage
+from mac.utils import split_edges, Edge, round_madow
 
 import matplotlib.pyplot as plt
 plt.rcParams['text.usetex'] = True
@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     # Make a MAC Solver
     mac = MAC(odom_edges, lc_edges, num_poses, use_cache=False)
-    mac_cache = MAC(odom_edges, lc_edges, num_poses, use_cache=True, use_cholesky=True)
+    mac_cache = MAC(odom_edges, lc_edges, num_poses, fiedler_method="tracemin_cholesky", use_cache=True)
 
     #############################
     # Running the tests!
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         unrounded_results.append(unrounded)
 
         start = timer()
-        result_cache, unrounded_cache, upper_cache = mac_cache.fw_subset(w_init, num_lc, max_iters=20, rounding="nearest", fallback=False, duality_gap_tol=1e-4)
+        result_cache, unrounded_cache, upper_cache = mac_cache.fw_subset(w_init, num_lc, max_iters=20, rounding="nearest", fallback=False)
         end = timer()
         solve_time = end - start
         cache_times.append(solve_time)
