@@ -67,6 +67,14 @@ In each case, the set of fixed edges is a chain, and the remaining edges are con
 
 For the pose graph examples, you will need to install [SE-Sync](https://github.com/david-m-rosen/SE-Sync) with [Python bindings](https://github.com/david-m-rosen/SE-Sync#python).
 
+If you want to build the bindings with a given `conda` environment, you can do so with:
+```bash
+conda activate [your environment]
+mkdir -p /path/to/SESync/C++/build
+cd /path/to/SESync/C++/build
+cmake -DBUILD_PYTHON_BINDINGS=ON -DPython3_EXECUTABLE=$(which python) ..
+```
+
 Once that is installed, you need to modify the SE-Sync path in `g2o_experiment.py`:
 
 ```python
