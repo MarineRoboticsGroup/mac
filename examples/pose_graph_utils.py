@@ -107,7 +107,7 @@ def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
     y = t_hat_anchored[1, :]
     if d == 3:
         z = t_hat_anchored[2, :]
-    print(x.shape)
+    # print(x.shape)
     # print(x)
     # print(y)
 
@@ -331,7 +331,6 @@ def translations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
     """
     d, cols = xhat.shape
     n = int(cols / (d + 1))
-    print(n)
     return xhat[:, 0:n]
 
 
