@@ -258,7 +258,7 @@ def select_edges(edges, w):
     Select the subset of edges from `edges` with weight equal to one in
     `w`.
     """
-    assert len(edges) == len(w)
+    assert len(edges) == len(w), f"Selection mask length {len(w)} does not match number of edges {len(edges)}"
     edges_out = []
     for i, edge in enumerate(edges):
         if w[i] == 1.0:

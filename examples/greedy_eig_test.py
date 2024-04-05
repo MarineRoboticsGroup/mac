@@ -44,8 +44,7 @@ selected = select_edges(candidate_meas, result)
 init_selected_G = mac_to_nx(fixed_meas + init_selected)
 selected_G = mac_to_nx(fixed_meas + selected)
 
-w_greedy_eig = naive_greedy_eig.subset(num_candidates)
-selected_eig = select_edges(candidate_meas, w_greedy_eig)
+w_greedy_eig, selected_eig = naive_greedy_eig.subset(num_candidates)
 selected_G_eig = mac_to_nx(fixed_meas + selected_eig)
 
 print(f"lambda2 Random: {mac.evaluate_objective(w_init)}")
