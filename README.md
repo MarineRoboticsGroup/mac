@@ -23,10 +23,8 @@ evaluate the quality of the sparsification methods by the quality of the
 resulting SLAM estimates. The timing results are from the Torus experiment.
 
 <p align="center">
- <img src="docs/examples.png" width="47%">  <img src="docs/comp_time_torus3D_300.png" width="40%"> 
+ <img src="docs/examples.jpg" width="47%">  <img src="docs/comp_time_torus3D_300.png" width="40%"> 
 </p>
-
-**NOTE [3/28/2024]: We will soon be merging a set of widespread changes in PR [#5](https://github.com/MarineRoboticsGroup/mac/pull/5). These changes bring new randomized rounding procedures, new experimements, unit tests, and documentation. See PR [#5](https://github.com/MarineRoboticsGroup/mac/pull/5) for details, or to try out the latest MAC updates before they are merged.**
 
 ## Getting started
 
