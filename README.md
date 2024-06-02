@@ -28,7 +28,15 @@ resulting SLAM estimates. The timing results are from the Torus experiment.
 
 ## Getting started
 
-Install MAC via `pip`:
+MAC can be installed by cloning the `mac` repo and running `pip` from the project root:
+```bash
+git clone git@github.com:MarineRoboticsGroup/mac.git
+cd mac
+pip install -e .
+```
+
+
+You can also install MAC via `pip` without cloning if you want to use the library directly:
 ```bash
 pip install git+https://github.com/MarineRoboticsGroup/mac
 ```
