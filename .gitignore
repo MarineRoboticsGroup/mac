@@ -67,9 +67,7 @@ build/
 
 # Large Files #
 ###############
-*.png
 *.mp4
-*.jpg
 
 # Blender #
 ###########
