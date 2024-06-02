@@ -6,7 +6,12 @@ from typing import List, Tuple, Union
 import networkx as nx
 from mac.utils import Edge
 
-# Define RelativePoseMeasurement container
+from evo.core.trajectory import PoseTrajectory3D
+from evo.core import sync
+from evo.core import metrics
+from evo.core.metrics import PoseRelation, Unit
+
+# Container for SE-Sync-style relative pose measurements
 RelativePoseMeasurement = namedtuple('RelativePoseMeasurement',
                                      ['i', 'j', 't', 'R', 'kappa', 'tau'])
 
@@ -71,7 +76,6 @@ def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
                 show: bool=True, color: str='b', alpha: float=0.25) -> None:
     """Plots the edges indicated by the given measurements, with node vertices
     determined by xhat. In english: plots the estimated pose graph.
-
     Args:
         xhat (np.ndarray): the variable matrix containing the poses to plot
         measurements (List[RelativePoseMeasurement]): the list of measurements
@@ -85,7 +89,7 @@ def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
 
     d, n = t_hat.shape
     if d == 3:
-        ax = fig.gca(projector='3d')
+        ax = fig.add_subplot(projection='3d')
     else:
         ax = fig.add_subplot(1,1,1)
 
@@ -101,13 +105,22 @@ def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
 
     x = t_hat_anchored[0, :]
     y = t_hat_anchored[1, :]
+    if d == 3:
+        z = t_hat_anchored[2, :]
+    # print(x.shape)
     # print(x)
     # print(y)
 
     # Plot odometric links (this should skip lines that don't make sense?)
-    ax.plot(
-        x.transpose(),
-        y.transpose(), alpha=1.0, color=color, linewidth=0.5)  # matplotlib.pyplot hates row vectors, so we transpose
+    if d == 2:
+        ax.plot(
+            x.transpose(),
+            y.transpose(), alpha=1.0, color=color, linewidth=0.5)  # matplotlib.pyplot hates row vectors, so we transpose
+    # else:
+        # d == 3
+        # ax.scatter(x.transpose(), y.transpose(), zs=z.transpose(), alpha=1.0, color=color, linewidth=0.5)  # matplotlib.pyplot hates row vectors, so we transpose
+        # ax.plot(x.transpose(), y.transpose(), zs=z.transpose(), alpha=1.0, color=color, linewidth=0.5)  # matplotlib.pyplot hates row vectors, so we transpose
+
 
     # print(x.shape)
     # plt.scatter(
@@ -124,7 +137,18 @@ def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
 
         if abs(id1 - id2) > 1:
             # This is a loop closure measurement
-            ax.plot(x_pair, y_pair, alpha=alpha, color=color, linewidth=0.5)
+            if d == 2:
+                ax.plot(x_pair, y_pair, alpha=alpha, color=color, linewidth=0.5)
+            else:
+                # d == 3
+                z_pair = [t_hat_anchored[2, id1], t_hat_anchored[2, id2]]
+                ax.plot3D(x_pair, y_pair, z_pair, alpha=1.0, color=color, linewidth=0.1)
+        else:
+            if d == 3:
+                # d == 3
+                z_pair = [t_hat_anchored[2, id1], t_hat_anchored[2, id2]]
+                ax.plot3D(x_pair, y_pair, z_pair, alpha=1.0, color=color, linewidth=0.1)
+
         # else:
         #     plt.plot(x_pair, y_pair, color='r')
 
@@ -139,7 +163,6 @@ def plot_poses(xhat: np.ndarray, measurements: List[RelativePoseMeasurement],
 
     if show:
         plt.show()
-
 
 def quat2rot(q: Union[np.ndarray, List]) -> np.ndarray:
     """
@@ -187,7 +210,9 @@ def read_g2o_file(filename: str) -> Tuple[List[RelativePoseMeasurement], int]:
     measurements = []
     with open(filename, 'r') as infile:
         num_poses = 0
+        line_count = 0
         for line in infile:
+            line_count += 1
             parsed_line = line.split(' ', )
 
             # Clean up output
@@ -237,8 +262,13 @@ def read_g2o_file(filename: str) -> Tuple[List[RelativePoseMeasurement], int]:
                                       [I15, I25, I35, I45, I55, I56],
                                       [I16, I26, I36, I46, I56, I66]])
 
-                tau = 3.0 / np.trace(np.linalg.inv(meas_info[0:2, 0:2]))
-                kappa = 3.0 / (2.0 * np.trace(np.linalg.inv(meas_info[3:5, 3:5])))
+                try:
+                    tau = 3.0 / np.trace(np.linalg.inv(meas_info[0:3, 0:3]))
+                    kappa = 3.0 / (2.0 * np.trace(np.linalg.inv(meas_info[3:6, 3:6])))
+                except np.linalg.LinAlgError as e:
+                    print(f"Warning: measurement {i} -> {j} has a singular information matrix on line {line_count} of {filename}")
+                    print(f"Information matrix: {meas_info}")
+                    raise e
 
                 measurement = RelativePoseMeasurement(i=i,
                                                       j=j,
@@ -301,7 +331,6 @@ def translations_from_variable_matrix(xhat: np.ndarray) -> np.ndarray:
     """
     d, cols = xhat.shape
     n = int(cols / (d + 1))
-    print(n)
     return xhat[:, 0:n]
 
 
@@ -351,3 +380,117 @@ def rpm_to_nx(measurements: List[RelativePoseMeasurement]) -> nx.Graph:
     for meas in measurements:
         G.add_edge(meas.i, meas.j, weight=meas.kappa)
     return G
+
+def se2_to_se3(pose):
+    """Convert a SE(2) pose represented as a (3 x 3) matrix to its representation
+    embedded in SE(3). Specifically, suppose we have: pose := [R t; 0 1] where
+    R is a 2x2 matrix representing an element of SO(2) and t is a vector in R2.
+    This function returns the (4 x 4) matrix:
+
+    [R 0 t; 0 0 1 0; 0 0 0 1]
+
+    `pose`: The pose to convert
+    returns pose as an SE(3) element.
+    """
+    Rblock = pose[0:2, 0:2]
+    tblock = pose[0:2, 2][:, np.newaxis] # Extract translation block as column
+    pose3D = np.block([[Rblock, np.array([[0.0], [0.0]]), tblock], # top 2x4 block
+                        [0.0, 0.0, 1.0, 0.0], # added 1x4 block
+                        [0.0, 0.0, 0.0, 1.0]]) # make it homogeneous
+    return pose3D
+
+def sesync_poses_to_traj(xhat: np.ndarray) -> PoseTrajectory3D:
+    """Convert a set of sesync poses to a trajectory that can parsed by evo.
+
+    Args:
+        xhat (np.ndarray): the sesync poses
+
+
+    Returns:
+        PoseTrajectory3D: the trajectory
+
+    """
+    translations = translations_from_variable_matrix(xhat)
+    rotations = rotations_from_variable_matrix(xhat)
+
+    d = translations.shape[0]
+    n = translations.shape[1]
+
+    # 'Unrotate' the vectors by pre-multiplying by the inverse of the first
+    # orientation estimate
+    t_hat_rotated = rotations[0:d, 0:d].transpose().dot(translations)
+    R_hat_rotated = rotations[0:d, 0:d].transpose().dot(rotations)
+
+    # Translate the resulting vectors to the origin
+    t_hat_anchored = t_hat_rotated - np.mat(t_hat_rotated[:, 0]).transpose()
+
+    traj = []  # a List[np.ndarray] where each item is a 4x4 SE(3) matrix
+    for i in range(n):
+        pose = np.eye(d + 1, d + 1)
+        pose[0:d, 0:d] = R_hat_rotated[:, i*d:(i+1)*d]
+        pose[0:d, d] = t_hat_anchored[:, i].flatten()
+        if d == 3:
+            traj.append(pose)
+        else:
+            traj.append(se2_to_se3(pose))
+
+    return PoseTrajectory3D(poses_se3 = traj,
+                            timestamps = np.array(range(n)).astype(np.float64))
+
+def ate_tran(estimate: PoseTrajectory3D, reference: PoseTrajectory3D) -> float:
+    """Compute the (mean) translation part of the absolute trajectory error (ATE)
+    between two trajectories.
+
+    Note that the pose-graph SLAM problem has a gauge symmetry: for any optimal
+    solution X in SE(d)^n, the solution GX for G in SE(d) is also optimal. For
+    this reason, we perform Umeyama alignment, obtaining the ATE as the
+    minimizer of the following problem:
+
+    d(estimate, reference) = min_{R, t} ||R * estimate + t - reference||_F^2
+
+    This gives a gauge-invariant metric for comparing trajectories.
+
+    The average translation error (i.e. (1/n) d(estimate, reference)) is returned.
+    """
+    traj_ref, traj_est = sync.associate_trajectories(reference, estimate)
+    # data = (traj_ref, traj_est)
+    umeyama_result = traj_est.align(traj_ref, correct_scale=False, correct_only_scale=False)
+
+    data = (traj_ref, traj_est)
+    ape_translation_metric = metrics.APE(metrics.PoseRelation.translation_part)
+    ape_translation_metric.process_data(data)
+    ape_stats = ape_translation_metric.get_all_statistics()
+    return ape_stats['mean']
+
+def rpe_rot(estimate: PoseTrajectory3D, reference: PoseTrajectory3D) -> float:
+    """Compute the (mean) rotation part of the relative pose error (RPE)
+    between two trajectories.
+
+    The average rotation error (i.e. (1/n) RPE) is returned.
+    """
+    traj_ref, traj_est = sync.associate_trajectories(reference, estimate)
+    data = (traj_ref, traj_est)
+    ape_rotation_metric = metrics.RPE(metrics.PoseRelation.rotation_angle_deg)
+    ape_rotation_metric.process_data(data)
+    ape_stats = ape_rotation_metric.get_all_statistics()
+    return ape_stats['mean']
+
+def poses_ate_tran(estimate: np.ndarray, reference: np.ndarray) -> float:
+    """
+    Helper function for computing the translation ATE of SE-Sync formatted poses.
+    """
+    traj_est = sesync_poses_to_traj(estimate)
+
+    traj_ref = sesync_poses_to_traj(reference)
+
+    return ate_tran(estimate=traj_est, reference=traj_ref)
+
+def poses_rpe_rot(estimate: np.ndarray, reference: np.ndarray) -> float:
+    """
+    Helper function for computing the rotation RPE of SE-Sync formatted poses.
+    """
+    traj_est = sesync_poses_to_traj(estimate)
+
+    traj_ref = sesync_poses_to_traj(reference)
+
+    return rpe_rot(estimate=traj_est, reference=traj_ref)

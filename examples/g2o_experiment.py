@@ -3,12 +3,14 @@ import random
 import numpy as np
 import networkx as nx
 from timeit import default_timer as timer
-from pose_graph_utils import read_g2o_file, plot_poses, rpm_to_mac, RelativePoseMeasurement
+from pose_graph_utils import read_g2o_file, plot_poses, rpm_to_mac, RelativePoseMeasurement, poses_ate_tran, poses_rpe_rot
 
 # MAC requirements
-from mac.mac import MAC
+from mac import MAC
 from mac.baseline import NaiveGreedy
-from mac.utils import split_measurements, Edge
+from mac.greedy_eig import GreedyEig
+from mac.greedy_esp import GreedyESP
+from mac.utils import split_edges, Edge, round_madow
 
 import matplotlib.pyplot as plt
 plt.rcParams['text.usetex'] = True
@@ -201,6 +203,10 @@ def select_measurements(measurements, w):
     return meas_out
 
 def to_sesync_format(measurements):
+    """
+    Convert a set of RelativePoseMeasurement to PySESync
+    RelativePoseMeasurement. Requires PySESync import.
+    """
     sesync_measurements = []
     for meas in measurements:
         sesync_meas = PySESync.RelativePoseMeasurement()
@@ -215,8 +221,21 @@ def to_sesync_format(measurements):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} [.g2o file]")
+        print(f"Usage: {sys.argv[0]} [.g2o file] [optional: --run-greedy]")
         sys.exit()
+        pass
+
+    run_greedy = False
+    if len(sys.argv) > 2:
+        if sys.argv[2] == "--run-greedy":
+            run_greedy = True
+            pass
+        else:
+            print(f"Unknown argument: {sys.argv[2]}")
+            print(f"Usage: {sys.argv[0]} [.g2o file] [optional: --run-greedy]")
+            sys.exit()
+            pass
+        pass
 
     dataset_name = sys.argv[1].split('/')[-1].split('.')[0]
     print(f"Loading dataset: {dataset_name}")
@@ -229,39 +248,62 @@ if __name__ == '__main__':
     print("Success! elapsed time: ", (end - start))
 
     # Split measurements into odom and loop closures
-    odom_measurements, lc_measurements = split_measurements(measurements)
+    odom_measurements, lc_measurements = split_edges(measurements)
 
-    # G_lc currently only used for NaiveGreedy - we should be able to remove this easily
-    G_lc = nx_rot_G_w(lc_measurements, num_poses)
-
-    # G_odom should have a single connected component
-    # print([len(c) for c in sorted(nx.connected_components(G_odom), key=len, reverse=True)])
+    # Convert measurements to MAC edge format
+    odom_edges = rpm_to_mac(odom_measurements)
+    lc_edges = rpm_to_mac(lc_measurements)
 
     # Print dataset stats
     print(f"Loaded {len(measurements)} total measurements with: ")
     print(f"\t {len(odom_measurements)} base (odometry) measurements and")
     print(f"\t {len(lc_measurements)} candidate (loop closure) measurements")
 
+    # solvers = [("MAC", MAC(odom_edges, lc_edges, num_poses)),
+    #            ("Naive", NaiveGreedy(lc_edges))]
+
+    # if run_greedy:
+    #     solvers.append(("GreedyESP", Greedy(odom_edges, lc_edges, num_poses, lazy=True)))
+    #     pass
+
     # Make a MAC Solver
-    mac = MAC(rpm_to_mac(odom_measurements), rpm_to_mac(lc_measurements), num_poses)
+    mac = MAC(odom_edges, lc_edges, num_poses, use_cache=True, fiedler_method="tracemin_cholesky")
 
     # Make a Naive Solver
-    greedy = NaiveGreedy(G_lc)
+    naive = NaiveGreedy(lc_edges)
+
+    # Make a GreedyEig Solver
+    if run_greedy:
+        # greedy_eig = GreedyEig(rpm_to_mac(odom_measurements), rpm_to_mac(lc_measurements), num_poses)
+        greedy_esp = GreedyESP(odom_edges, lc_edges, num_poses, lazy=True)
 
     #############################
     # Running the tests!
     #############################
 
     # Test between 100% and 0% loop closures
+    # NOTE: If running greedy, these must be in increasing order!
     percent_lc = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
-    # Containers for results
+    # Container for Naive results
+    naive_results = []
+
+    # Containers for MAC results
     results = []
     unrounded_results = []
     upper_bounds = []
-    greedy_results = []
-    random_results = []
     times = []
+
+    madow_results = []
+    madow_times = []
+
+    # Container for GreedyEig results
+    greedy_eig_results = []
+    greedy_eig_times = []
+
+    # Container for GreedyESP results
+    greedy_esp_results = []
+    greedy_esp_times = []
 
     for pct_lc in percent_lc:
         num_lc = int(pct_lc * len(lc_measurements))
@@ -269,55 +311,115 @@ if __name__ == '__main__':
 
         # Compute a solution using the naive method. This serves both as a
         # baseline and as a sparse initializer for our method.
-        greedy_result = greedy.subset(num_lc)
-        greedy_results.append(greedy_result)
+        naive_result = naive.subset(num_lc)
+        naive_results.append(naive_result)
 
-        w_init = greedy_result
+        w_init = naive_result
 
         # Solve the relaxed maximum algebraic connectivity augmentation problem.
         start = timer()
-        result, unrounded, upper = mac.fw_subset(w_init, num_lc, max_iters=20)
+        result, unrounded, upper, rtime = mac.fw_subset(w_init, num_lc, max_iters=20, rounding="nearest", return_rounding_time=True)
         end = timer()
-        times.append(end - start)
+        solve_time = end - start
+        times.append(solve_time)
         results.append(result)
         upper_bounds.append(upper)
         unrounded_results.append(unrounded)
 
+        start = timer()
+        madow_rounded = round_madow(unrounded, num_lc, seed=np.random.RandomState(42))
+        end = timer()
+        madow_results.append(madow_rounded)
+        # Time for Madow rounded solution is total MAC time (including nearest
+        # neighbor rounding) plus the time to perform Madow rounding, minus the
+        # nearest neighbor rounding time. Because Madow and nearest differ only
+        # in the rounding procedure, we don't need to re-compute the interior
+        # point solution every time.
+        madow_times.append(solve_time + (end - start) - rtime)
+
+    # Solve the relaxed maximum algebraic connectivity augmentation problem.
+    if run_greedy:
+        # start = timer()
+        # greedy_eig_result, _ = greedy_eig.subset(num_lc)
+        # end = timer()
+        # greedy_eig_times.append(end - start)
+        # greedy_eig_results.append(greedy_eig_result)
+
+        num_lcs = [int(pct_lc * len(lc_measurements)) for pct_lc in percent_lc]
+        greedy_esp_results, _, greedy_esp_times = greedy_esp.subsets_lazy(num_lcs, verbose=True)
+        pass
+
     # Display the algebraic connectivity for each method
-    for i in range(len(greedy_results)):
+    for i in range(len(naive_results)):
         pct_lc = percent_lc[i]
-        print(f"Greedy AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(greedy_results[i])}")
+        print(f"Naive AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(naive_results[i])}")
         print(f"Our AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(results[i])}")
         print(f"Our unrounded AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(unrounded_results[i])}")
         print(f"Dual at {pct_lc * 100.0} % loop closures: {upper_bounds[i]}")
+        if run_greedy:
+            # print(f"Greedy Eig AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(greedy_eig_results[i])}")
+            print(f"Greedy ESP AC at {pct_lc * 100.0} % loop closures: {mac.evaluate_objective(greedy_esp_results[i])}")
+            pass
+        pass
 
     #############################
     # Plot the Results
     #############################
 
+
+    colors = {"MAC Nearest (Ours)": "C0",
+              "MAC Madow (Ours)": "C4",
+              "Unrounded": "C2",
+              "Dual Upper Bound": "C0",
+              "Greedy ESP": "C1",
+              "Naive Method": "C3"}
+
     # plot connectivity vs. percent_lc
     our_objective_vals = [mac.evaluate_objective(result) for result in results]
-    naive_objective_vals = [mac.evaluate_objective(greedy_result) for greedy_result in greedy_results]
+    naive_objective_vals = [mac.evaluate_objective(naive_result) for naive_result in naive_results]
     unrounded_objective_vals = [mac.evaluate_objective(unrounded) for unrounded in unrounded_results]
+    madow_objective_vals = [mac.evaluate_objective(madow) for madow in madow_results]
+    if run_greedy:
+        # greedy_eig_objective_vals = [mac.evaluate_objective(ge_result) for ge_result in greedy_eig_results]
+        greedy_esp_objective_vals = [mac.evaluate_objective(ge_result) for ge_result in greedy_esp_results]
 
-    plt.plot(100.0*np.array(percent_lc), our_objective_vals, label='Ours')
-    plt.plot(100.0*np.array(percent_lc), upper_bounds, label='Dual Upper Bound', linestyle='--', color='C0')
-    plt.fill_between(100.0*np.array(percent_lc), our_objective_vals, upper_bounds, alpha=0.2, label='Suboptimality Gap')
-    plt.plot(100.0*np.array(percent_lc), unrounded_objective_vals, label='Unrounded', c='C2')
-    plt.plot(100.0*np.array(percent_lc), naive_objective_vals, label='Naive Method', color='red', linestyle='-.')
+    plt.plot(100.0*np.array(percent_lc), our_objective_vals, label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.plot(100.0*np.array(percent_lc), madow_objective_vals, label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+
+    plt.plot(100.0*np.array(percent_lc), upper_bounds, label='Dual Upper Bound', linestyle='--', color=colors["Dual Upper Bound"])
+    plt.fill_between(100.0*np.array(percent_lc), our_objective_vals, upper_bounds, alpha=0.1)
+    plt.fill_between(100.0*np.array(percent_lc), madow_objective_vals, upper_bounds, alpha=0.1, color='C4')
+
+    plt.plot(100.0*np.array(percent_lc), unrounded_objective_vals, label='Unrounded', color=colors["Unrounded"])
+
+    if run_greedy:
+        plt.plot(100.0*np.array(percent_lc), greedy_esp_objective_vals, label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+        pass
+    plt.plot(100.0*np.array(percent_lc), naive_objective_vals, label='Naive Method', marker='o', color=colors["Naive Method"])
+
     plt.ylabel(r'Algebraic Connectivity $\lambda_2$')
     plt.xlabel(r'\% Edges Added')
     plt.legend()
     plt.savefig(f"alg_conn_{dataset_name}.png", dpi=600, bbox_inches='tight')
-    plt.show()
+    plt.savefig(f"alg_conn_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"alg_conn_{dataset_name}.svg", transparent=True,bbox_inches='tight')
+    # plt.show()
 
+    # Plot computation time vs. percent_lc
     plt.figure()
-    plt.plot(100.0*np.array(percent_lc), times)
-    plt.xlim([0.0, 90.0])
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), times[:-1], label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), madow_times[:-1], label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        # plt.plot(100.0*np.array(percent_lc), greedy_eig_times, label='Greedy E-Opt', color='orange')
+        plt.semilogy(100.0*np.array(percent_lc[:-1]), greedy_esp_times[:-1], label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.xlim([0.0, 100.0])
     plt.ylabel(r'Time (s)')
     plt.xlabel(r'\% Edges Added')
+    plt.legend()
     plt.savefig(f"comp_time_{dataset_name}.png", dpi=600, bbox_inches='tight')
-    plt.show()
+    plt.savefig(f"comp_time_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"comp_time_{dataset_name}.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
 
     #############################
     # Run SE-Sync
@@ -331,26 +433,46 @@ if __name__ == '__main__':
     opts.r0 = d + 1  # Start at level d + 1 of the Riemannian Staircase
 
     sesync_results = []
-    sesync_greedy = []
-    for i in range(len(greedy_results)):
+    sesync_madow = []
+    sesync_naive = []
+    sesync_eig = []
+    sesync_esp = []
+    for i in range(len(naive_results)):
         our_selected_lc = select_measurements(lc_measurements, results[i])
         our_meas = odom_measurements + our_selected_lc
         sesync_our_meas = to_sesync_format(our_meas)
         sesync_result = PySESync.SESync(sesync_our_meas, opts)
         sesync_results.append(sesync_result)
-        greedy_selected_lc = select_measurements(lc_measurements, greedy_results[i])
-        greedy_meas = odom_measurements + greedy_selected_lc
-        sesync_result_greedy = PySESync.SESync(to_sesync_format(greedy_meas), opts)
-        sesync_greedy.append(sesync_result_greedy)
+
+        madow_selected_lc = select_measurements(lc_measurements, madow_results[i])
+        madow_meas = odom_measurements + madow_selected_lc
+        sesync_result_madow = PySESync.SESync(to_sesync_format(madow_meas), opts)
+        sesync_madow.append(sesync_result_madow)
+
+        naive_selected_lc = select_measurements(lc_measurements, naive_results[i])
+        naive_meas = odom_measurements + naive_selected_lc
+        sesync_result_naive = PySESync.SESync(to_sesync_format(naive_meas), opts)
+        sesync_naive.append(sesync_result_naive)
+
+        if run_greedy:
+            esp_selected_lc = select_measurements(lc_measurements, greedy_esp_results[i])
+            esp_meas = odom_measurements + esp_selected_lc
+            sesync_result_esp = PySESync.SESync(to_sesync_format(esp_meas), opts)
+            sesync_esp.append(sesync_result_esp)
 
     plt.figure()
-    plt.plot(100.0*np.array(percent_lc), [res.total_computation_time for res in sesync_results], label='Ours')
-    plt.plot(100.0*np.array(percent_lc), [res.total_computation_time for res in sesync_greedy], label='Naive Method', color='red', linestyle='-.')
+    plt.plot(100.0*np.array(percent_lc), [res.total_computation_time for res in sesync_results], label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.plot(100.0*np.array(percent_lc), [res.total_computation_time for res in sesync_madow], label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.plot(100.0*np.array(percent_lc), [res.total_computation_time for res in sesync_esp], label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.plot(100.0*np.array(percent_lc), [res.total_computation_time for res in sesync_naive], label='Naive Method', marker='o', color=colors["Naive Method"])
     plt.legend()
     plt.xlabel(r'\% Edges Added')
     plt.ylabel(r'Time (s)')
     plt.savefig(f"sesync_comp_time_{dataset_name}.png", dpi=600, bbox_inches='tight')
-    plt.show()
+    plt.savefig(f"sesync_comp_time_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"sesync_comp_time_{dataset_name}.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
 
     # Compute the SE-Sync cost for each solution under the *full* set of measurements
     M = construct_sesync_quadratic_form_matrix(measurements)
@@ -360,89 +482,231 @@ if __name__ == '__main__':
     our_rot_costs = []
     our_full_costs = []
     our_SOd_orbdists = []
+    our_ate_trans = []
+    our_rpe_rots = []
+
+    madow_rot_costs = []
+    madow_full_costs = []
+    madow_SOd_orbdists = []
+    madow_ate_trans = []
+    madow_rpe_rots = []
 
     naive_rot_costs = []
     naive_full_costs = []
     naive_SOd_orbdists = []
+    naive_ate_trans = []
+    naive_rpe_rots = []
+
+    esp_rot_costs = []
+    esp_full_costs = []
+    esp_SOd_orbdists = []
+    esp_ate_trans = []
+    esp_rpe_rots = []
     for i in range(len(percent_lc)):
         print(f"Percent LC: {percent_lc[i]}")
 
         xhat_ours = sesync_results[i].xhat
-        xhat_naive = sesync_greedy[i].xhat
+        xhat_madow = sesync_madow[i].xhat
+        xhat_naive = sesync_naive[i].xhat
 
         our_selected_lc = select_measurements(lc_measurements, results[i])
         our_meas = odom_measurements + our_selected_lc
 
-        greedy_selected_lc = select_measurements(lc_measurements, greedy_results[i])
-        greedy_meas = odom_measurements + greedy_selected_lc
+        madow_selected_lc = select_measurements(lc_measurements, madow_results[i])
+        madow_meas = odom_measurements + madow_selected_lc
+
+        naive_selected_lc = select_measurements(lc_measurements, naive_results[i])
+        naive_meas = odom_measurements + naive_selected_lc
 
         our_rot_cost = evaluate_sesync_rotation_objective(LGrho, xhat_ours[:, num_poses:])
         our_full_cost = evaluate_sesync_objective(M, xhat_ours)
         our_SOd_orbdist = orbit_distance_dS(sesync_full.xhat[:,num_poses:], xhat_ours[:,num_poses:])
+        our_ate_tran = poses_ate_tran(xhat_ours, sesync_full.xhat)
+        our_rpe_rot = poses_rpe_rot(xhat_ours, sesync_full.xhat)
 
         our_rot_costs.append(our_rot_cost)
         our_full_costs.append(our_full_cost)
         our_SOd_orbdists.append(our_SOd_orbdist)
+        our_ate_trans.append(our_ate_tran)
+        our_rpe_rots.append(our_rpe_rot)
 
-        plot_poses(xhat_ours, our_meas, show=False)
+        plot_poses(xhat_ours, our_meas, show=False, color=colors["MAC Nearest (Ours)"])
         plt.savefig(f"ours_{dataset_name}_{str(percent_lc[i])}.png", dpi=600)
+        plt.savefig(f"ours_{dataset_name}_{str(percent_lc[i])}_300.png", dpi=300)
+        plt.savefig(f"ours_{dataset_name}_{str(percent_lc[i])}.svg", transparent=True)
         plt.close()
 
         # Print error for our method
-        print(f"Our rotation cost: {our_rot_cost}")
-        print(f"Our full cost {our_full_cost}")
-        print(f"Our SO orbdist: {our_SOd_orbdist}")
+        # print(f"Our rotation cost: {our_rot_cost}")
+        # print(f"Our full cost {our_full_cost}")
+        # print(f"Our SO orbdist: {our_SOd_orbdist}")
+
+        madow_rot_cost = evaluate_sesync_rotation_objective(LGrho, xhat_madow[:, num_poses:])
+        madow_full_cost = evaluate_sesync_objective(M, xhat_madow)
+        madow_SOd_orbdist = orbit_distance_dS(sesync_full.xhat[:,num_poses:], xhat_madow[:,num_poses:])
+        madow_ate_tran = poses_ate_tran(xhat_madow, sesync_full.xhat)
+        madow_rpe_rot = poses_rpe_rot(xhat_madow, sesync_full.xhat)
+
+        madow_rot_costs.append(madow_rot_cost)
+        madow_full_costs.append(madow_full_cost)
+        madow_SOd_orbdists.append(madow_SOd_orbdist)
+        madow_ate_trans.append(madow_ate_tran)
+        madow_rpe_rots.append(madow_rpe_rot)
+
+        plot_poses(xhat_madow, madow_meas, show=False, color=colors["MAC Madow (Ours)"])
+        plt.savefig(f"madow_{dataset_name}_{str(percent_lc[i])}.png", dpi=600)
+        plt.savefig(f"madow_{dataset_name}_{str(percent_lc[i])}_300.png", dpi=300)
+        plt.savefig(f"madow_{dataset_name}_{str(percent_lc[i])}.svg", transparent=True)
+        plt.close()
 
         naive_rot_cost = evaluate_sesync_rotation_objective(LGrho, xhat_naive[:, num_poses:])
         naive_full_cost = evaluate_sesync_objective(M, xhat_naive)
         naive_SOd_orbdist = orbit_distance_dS(sesync_full.xhat[:,num_poses:], xhat_naive[:,num_poses:])
+        naive_ate_tran = poses_ate_tran(xhat_naive, sesync_full.xhat)
+        naive_rpe_rot = poses_rpe_rot(xhat_naive, sesync_full.xhat)
 
         naive_rot_costs.append(naive_rot_cost)
         naive_full_costs.append(naive_full_cost)
         naive_SOd_orbdists.append(naive_SOd_orbdist)
+        naive_ate_trans.append(naive_ate_tran)
+        naive_rpe_rots.append(naive_rpe_rot)
 
-        plot_poses(xhat_naive, greedy_meas, show=False)
+        plot_poses(xhat_naive, naive_meas, show=False, color=colors["Naive Method"])
         plt.savefig(f"naive_{dataset_name}_{str(percent_lc[i])}.png", dpi=600)
+        plt.savefig(f"naive_{dataset_name}_{str(percent_lc[i])}_300.png", dpi=300)
+        plt.savefig(f"naive_{dataset_name}_{str(percent_lc[i])}.svg", transparent=True)
         plt.close()
 
         # Print Error for naive method
-        print(f"Naive rotation cost: {naive_rot_cost}")
-        print(f"Naive full cost: {naive_full_cost}")
-        print(f"Naive SO orbdist: {naive_SOd_orbdist}")
+        # print(f"Naive rotation cost: {naive_rot_cost}")
+        # print(f"Naive full cost: {naive_full_cost}")
+        # print(f"Naive SO orbdist: {naive_SOd_orbdist}")
+
+        if run_greedy:
+            xhat_esp = sesync_esp[i].xhat
+            esp_selected_lc = select_measurements(lc_measurements, greedy_esp_results[i])
+            esp_meas = odom_measurements + esp_selected_lc
+
+            esp_rot_cost = evaluate_sesync_rotation_objective(LGrho, xhat_esp[:, num_poses:])
+            esp_full_cost = evaluate_sesync_objective(M, xhat_esp)
+            esp_SOd_orbdist = orbit_distance_dS(sesync_full.xhat[:,num_poses:], xhat_esp[:,num_poses:])
+            esp_ate_tran = poses_ate_tran(xhat_esp, sesync_full.xhat)
+            esp_rpe_rot = poses_rpe_rot(xhat_esp, sesync_full.xhat)
+
+            esp_rot_costs.append(esp_rot_cost)
+            esp_full_costs.append(esp_full_cost)
+            esp_SOd_orbdists.append(esp_SOd_orbdist)
+            esp_ate_trans.append(esp_ate_tran)
+            esp_rpe_rots.append(esp_rpe_rot)
+
+            plot_poses(xhat_esp, esp_meas, show=False, color=colors["Greedy ESP"])
+            plt.savefig(f"esp_{dataset_name}_{str(percent_lc[i])}.png", dpi=600)
+            plt.savefig(f"esp_{dataset_name}_{str(percent_lc[i])}_300.png", dpi=300)
+            plt.savefig(f"esp_{dataset_name}_{str(percent_lc[i])}.svg", transparent=True)
+            plt.close()
+
 
     plt.figure()
-    plt.semilogy(100.0*np.array(percent_lc), our_full_costs, label='Ours')
-    plt.semilogy(100.0*np.array(percent_lc), naive_full_costs, label='Naive Method', color='red', linestyle='-.')
+    plt.plot(100.0*np.array(percent_lc), our_ate_trans, label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.plot(100.0*np.array(percent_lc), madow_ate_trans, label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.plot(100.0*np.array(percent_lc), esp_ate_trans, label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.plot(100.0*np.array(percent_lc), naive_ate_trans, label='Naive Method', marker='o', color=colors["Naive Method"])
+    plt.xlabel(r'\% Edges Added')
+    plt.ylabel(r'ATE Translation [m]')
+    plt.legend()
+    plt.savefig(f"ate_tran_{dataset_name}.png", dpi=600, bbox_inches='tight')
+    plt.savefig(f"ate_tran_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"ate_tran_{dataset_name}.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
+
+    plt.figure()
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), our_ate_trans[:-1], label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), madow_ate_trans[:-1], label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.semilogy(100.0*np.array(percent_lc[:-1]), esp_ate_trans[:-1], label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), naive_ate_trans[:-1], label='Naive Method', marker='o', color=colors["Naive Method"])
+    plt.xlabel(r'\% Edges Added')
+    plt.ylabel(r'ATE Translation [m]')
+    plt.xlim([0.0, 100.0])
+    plt.legend()
+    plt.savefig(f"ate_tran_{dataset_name}_log.png", dpi=600, bbox_inches='tight')
+    plt.savefig(f"ate_tran_{dataset_name}_log_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"ate_tran_{dataset_name}_log.svg", transparent=True, bbox_inches='tight')
+
+    plt.figure()
+    plt.plot(100.0*np.array(percent_lc), our_rpe_rots, label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.plot(100.0*np.array(percent_lc), madow_rpe_rots, label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.plot(100.0*np.array(percent_lc), esp_rpe_rots, label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.plot(100.0*np.array(percent_lc), naive_rpe_rots, label='Naive Method', marker='o', color=colors["Naive Method"])
+    plt.xlabel(r'\% Edges Added')
+    plt.ylabel(r'RPE Rotation [deg]')
+    plt.legend()
+    plt.savefig(f"rpe_rot_{dataset_name}.png", dpi=600, bbox_inches='tight')
+    plt.savefig(f"rpe_rot_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"rpe_rot_{dataset_name}.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
+
+    plt.figure()
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), our_rpe_rots[:-1], label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), madow_rpe_rots[:-1], label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.semilogy(100.0*np.array(percent_lc[:-1]), esp_rpe_rots[:-1], label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.semilogy(100.0*np.array(percent_lc[:-1]), naive_rpe_rots[:-1], label='Naive Method', marker='o', color=colors["Naive Method"])
+    plt.xlabel(r'\% Edges Added')
+    plt.ylabel(r'RPE Rotation [deg]')
+    plt.xlim([0.0, 100.0])
+    plt.legend()
+    plt.savefig(f"rpe_rot_{dataset_name}_log.png", dpi=600, bbox_inches='tight')
+    plt.savefig(f"rpe_rot_{dataset_name}_log_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"rpe_rot_{dataset_name}_log.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
+
+    plt.figure()
+    plt.semilogy(100.0*np.array(percent_lc), our_full_costs, label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.semilogy(100.0*np.array(percent_lc), madow_full_costs, label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.semilogy(100.0*np.array(percent_lc), esp_full_costs, label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.semilogy(100.0*np.array(percent_lc), naive_full_costs, label='Naive Method', marker='o', color=colors["Naive Method"])
     plt.xlabel(r'\% Edges Added')
     plt.ylabel(r'Objective Value')
     plt.legend()
     plt.savefig(f"obj_val_{dataset_name}.png", dpi=600, bbox_inches='tight')
-    plt.show()
+    plt.savefig(f"obj_val_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"obj_val_{dataset_name}.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
 
     plt.figure()
-    plt.plot(100.0*np.array(percent_lc), our_SOd_orbdists, label='Ours')
-    plt.plot(100.0*np.array(percent_lc), naive_SOd_orbdists, label='Naive Method', color='red', linestyle='-.')
+    plt.plot(100.0*np.array(percent_lc), our_SOd_orbdists, label='MAC Nearest (Ours)', marker='s', color=colors["MAC Nearest (Ours)"])
+    plt.plot(100.0*np.array(percent_lc), madow_SOd_orbdists, label='MAC Madow (Ours)', marker='o', color=colors["MAC Madow (Ours)"])
+    if run_greedy:
+        plt.plot(100.0*np.array(percent_lc), esp_SOd_orbdists, label='Greedy ESP', marker='o', color=colors["Greedy ESP"])
+    plt.plot(100.0*np.array(percent_lc), naive_SOd_orbdists, label='Naive Method', marker='o', color=colors["Naive Method"])
     plt.ylabel(r'$\mathrm{SO}(d)$ orbit distance')
     plt.xlabel(r'\% Edges Added')
     plt.legend()
     plt.savefig(f"orbdist_{dataset_name}.png", dpi=600, bbox_inches='tight')
-    plt.show()
+    plt.savefig(f"orbdist_{dataset_name}_300.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"orbdist_{dataset_name}.svg", transparent=True, bbox_inches='tight')
+    # plt.show()
+
 
     # Extract translational states from solution xhat
-    xhat = sesync_result.xhat
-    print(xhat.shape)
-    R0inv = np.linalg.inv(xhat[:, num_poses : num_poses + 2])
-    t = np.matmul(R0inv, xhat[:, 0:num_poses])
+    # xhat = sesync_result.xhat
+    # print(xhat.shape)
+    # R0inv = np.linalg.inv(xhat[:, num_poses : num_poses + d])
+    # t = np.matmul(R0inv, xhat[:, 0:num_poses])
 
-    print("Our rotation cost: ", evaluate_sesync_rotation_objective(LGrho, xhat[:, num_poses:]))
-    print("Our cost: ", evaluate_sesync_objective(M, xhat))
+    # print("Our rotation cost: ", evaluate_sesync_rotation_objective(LGrho, xhat[:, num_poses:]))
+    # print("Our cost: ", evaluate_sesync_objective(M, xhat))
 
-    plot_poses(xhat, our_meas)
+    # plot_poses(xhat, our_meas)
 
-    xhat = sesync_result_greedy.xhat
-    R0inv = np.linalg.inv(xhat[:, num_poses : num_poses + 2])
-    t = np.matmul(R0inv, xhat[:, 0:num_poses])
+    # xhat = sesync_result_naive.xhat
+    # R0inv = np.linalg.inv(xhat[:, num_poses : num_poses + d])
+    # t = np.matmul(R0inv, xhat[:, 0:num_poses])
 
-    print("Naive rotation cost: ", evaluate_sesync_rotation_objective(LGrho, xhat[:, num_poses:]))
-    print("Naive cost: ", evaluate_sesync_objective(M, xhat))
+    # print("Naive rotation cost: ", evaluate_sesync_rotation_objective(LGrho, xhat[:, num_poses:]))
+    # print("Naive cost: ", evaluate_sesync_objective(M, xhat))
 

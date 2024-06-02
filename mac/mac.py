@@ -1,60 +1,68 @@
 from mac.utils import *
+import mac.fiedler as fiedler
+import mac.frankwolfe as fw
+from timeit import default_timer as timer
+
 import numpy as np
 import networkx as nx
 import networkx.linalg as la
-import networkx.generators as gen
 import matplotlib.pyplot as plt
 
 from scipy.sparse import csc_matrix, csr_matrix
-from scipy.sparse.linalg import eigsh, lobpcg
 
 from timeit import default_timer as timer
 
-from collections import namedtuple
-
-MACResult = namedtuple('MACResult', ['w', 'F_unrounded', 'objective_values', 'duality_gaps'])
-
 class MAC:
-    def __init__(self, odom_measurements, lc_measurements, num_poses):
-        self.L_odom = weight_graph_lap_from_edge_list(odom_measurements, num_poses)
-        self.num_poses = num_poses
+    def __init__(self, fixed_edges, candidate_edges, num_nodes,
+                fiedler_method='tracemin_lu', use_cache=False, fiedler_tol=1e-8,
+                min_selection_weight_tol=1e-10):
+        """Parameters
+        ----------
+        fixed_edges : list of Edge
+            List of edges that are fixed in the graph.
+        candidate_edges : list of Edge
+            List of edges that are candidates for addition to the graph.
+        num_nodes : int
+            Number of nodes in the graph.
+        fiedler_method : str, optional
+            Method to use for computing the Fiedler vector. Options are
+            'tracemin_lu', 'tracemin_cholesky'. Default is 'tracemin_lu'. Using the
+            'tracemin_cholesky' method is faster but requires SuiteSparse to be
+            installed.
+        use_cache : bool, optional
+            Whether to cache the Fiedler vector and the gradient.
+        fiedler_tol : float, optional
+            Tolerance for computing the Fiedler vector and corresponding eigenvalue.
+        min_edge_selection_tol : float, optional
+            Tolerance for the minimum edge selection weight. Default is 1e-10.
+        """
+        if (num_nodes == 0):
+            assert(len(fixed_edges) == len(candidate_edges) == 0)
+        self.L_fixed = weight_graph_lap_from_edge_list(fixed_edges, num_nodes)
+        self.num_nodes = num_nodes
         self.laplacian_e_list = []
         self.weights = []
         self.edge_list = []
 
-        for meas in lc_measurements:
-            laplacian_e = weight_graph_lap_from_edge_list([meas], num_poses)
+        for edge in candidate_edges:
+            laplacian_e = weight_graph_lap_from_edge_list([edge], num_nodes)
             self.laplacian_e_list.append(laplacian_e)
-            self.weights.append(meas.weight)
-            self.edge_list.append((meas.i,meas.j))
+            self.weights.append(edge.weight)
+            self.edge_list.append((edge.i, edge.j))
 
         self.laplacian_e_list = np.array(self.laplacian_e_list)
         self.weights = np.array(self.weights)
         self.edge_list = np.array(self.edge_list)
+        self.use_cache = use_cache
 
-    def find_fiedler_pair(self, L, method='tracemin_lu', tol=1e-8):
-        """
-        Compute the second smallest eigenvalue of L and corresponding
-        eigenvector using `method` and tolerance `tol`.
+        # Configuration for Fiedler vector computation
+        self.fiedler_method = fiedler_method
+        self.fiedler_tol = fiedler_tol
 
-        w: An element of [0,1]^m; this is the edge selection to use
-        method: Any method supported by NetworkX for computing algebraic
-        connectivity. See:
-        https://networkx.org/documentation/stable/reference/generated/networkx.linalg.algebraicconnectivity.algebraic_connectivity.html
+        # Truncate edges with selection weights below this threshold
+        self.min_selection_weight_tol = min_selection_weight_tol
 
-        tol: Numerical tolerance for eigenvalue computation
-
-        returns a tuple (lambda_2(L), v_2(L)) containing the Fiedler
-        value and corresponding vector.
-
-        """
-        assert(method != 'lobpcg') # LOBPCG not supported at the moment
-        find_fiedler_func = la.algebraicconnectivity._get_fiedler_func(method)
-        x = None
-        output = find_fiedler_func(L, x=x, normalized=False, tol=tol, seed=np.random.RandomState(7))
-        return output
-
-    def combined_laplacian(self, w, tol=1e-10):
+    def combined_laplacian(self, w):
         """
         Construct the combined Laplacian (fixed edges plus candidate edges weighted by w).
 
@@ -65,17 +73,17 @@ class MAC:
 
         returns the matrix L(w)
         """
-        idx = np.where(w > tol)
+        idx = np.where(w > self.min_selection_weight_tol)
         prod = w[idx]*self.weights[idx]
-        C1 = weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_poses)
-        C = self.L_odom + C1
+        C1 = weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_nodes)
+        C = self.L_fixed + C1
         return C
 
-    def evaluate_fiedler_pair(self, w, method='tracemin_lu', tol=1e-8):
+    def find_fiedler_pair(self, w):
         """
         Compute the second smallest eigenvalue of L(w) and corresponding
         eigenvector using `method` and tolerance `tol`. This is just a helper
-        that constructs L(w) and calls `self.find_fiedler_pair` on the
+        that constructs L(w) and calls `fiedler.find_fiedler_pair` on the
         resulting matrix, passing along the arguments.
 
         w: An element of [0,1]^m; this is the edge selection to use
@@ -83,13 +91,16 @@ class MAC:
         connectivity. See:
         https://networkx.org/documentation/stable/reference/generated/networkx.linalg.algebraicconnectivity.algebraic_connectivity.html
 
-        tol: Numerical tolerance for eigenvalue computation
-
         returns a tuple (lambda_2(L(w)), v_2(L(w))) containing the Fiedler
         value and corresponding vector.
 
         """
-        return self.find_fiedler_pair(self.combined_laplacian(w), method, tol)
+        L = self.combined_laplacian(w)
+        if L.shape[0] == 0:
+            # If the graph is empty, then the Fiedler value is 0 and the
+            # Fiedler vector is empty.
+            return 0.0, np.array([])
+        return fiedler.find_fiedler_pair(L, self.fiedler_method, tol=self.fiedler_tol)
 
     def evaluate_objective(self, w):
         """
@@ -97,12 +108,11 @@ class MAC:
         by w_i and lambda_2 is the second smallest eigenvalue (this is the
         algebraic connectivity).
 
-        w: Weights for each edge
+        w: Weights for each candidate edge (does not include fixed edges)
 
         returns F(w) = lambda_2(L(w)).
         """
-        L = self.combined_laplacian(w)
-        return self.find_fiedler_pair(L)[0]
+        return self.find_fiedler_pair(w)[0]
 
     def grad_from_fiedler(self, fiedler_vec):
         """
@@ -113,114 +123,116 @@ class MAC:
 
         returns grad F(w) from equation (8) of our paper: https://arxiv.org/pdf/2203.13897.pdf.
         """
-        grad = np.zeros(len(self.weights))
+        return fiedler.grad_from_fiedler(fiedler_vec, self.edge_list, self.weights)
 
-        for k in range(len(self.weights)):
-            edge = self.edge_list[k] # get edge (i,j)
-            v_i = fiedler_vec[edge[0]]
-            v_j = fiedler_vec[edge[1]]
-            weight_k = self.weights[k]
-            kdelta = weight_k * (v_i - v_j)
-            grad[k] = kdelta * (v_i - v_j)
-        return grad
+    def problem(self, x):
+        f, fiedler_vec = self.find_fiedler_pair(x)
+        gradf = self.grad_from_fiedler(fiedler_vec)
+        return (f, gradf)
 
-    def round_solution(self, w, k):
+    def problem_with_recycling(self, x, Q=None):
         """
-        Round a solution w to the relaxed problem, i.e. w \in [0,1]^m, |w| = k to a
-        solution to the original problem with w_i \in {0,1}. Ties between edges
-        are broken arbitrarily.
-
-        w: A solution in the feasible set for the relaxed problem
-        k: The number of edges to select
-
-        returns w': A solution in the feasible set for the original problem
+        Q is a set of recycled eigenvectors.
+        NOTE: experimental
         """
-        idx = np.argpartition(w, -k)[-k:]
-        rounded = np.zeros(len(w))
-        if k > 0:
-            rounded[idx] = 1.0
-        return rounded
+        f, fiedler_vec, Q = fiedler.find_fiedler_pair_and_eigvecs(self.combined_laplacian(x), X=Q, method=self.fiedler_method, tol=self.fiedler_tol)
+        gradf = self.grad_from_fiedler(fiedler_vec)
+        return f, gradf, Q
 
-    def simple_random_round(self, w, k):
-        """
-        Round a solution w to the relaxed problem, i.e. w \in [0,1]^m, |w| = k to
-        one with hard edge constraints and satisfying the constraint that the
-        expected number of selected edges is equal to k.
+    def fw_subset(self, w_init, k, rounding="nearest", fallback=False,
+                  max_iters=5, relative_duality_gap_tol=1e-4,
+                  grad_norm_tol=1e-8, random_rounding_max_iters=1, verbose=False, return_rounding_time=False):
+        """Use the Frank-Wolfe method to solve the subset selection problem,.
 
-        w: A solution in the feasible set for the relaxed problem
-        k: The number of edges to select _in expectation_
-
-        returns w': A solution containing hard edge selections with an expected
-        number of selected edges equal to k.
-        """
-        x = np.zeros(len(w))
-        for i in range(len(w)):
-            r = np.random.rand()
-            if w[i] > r:
-                x[i] = 1.0
-        return x
-
-    def round_solution_tiebreaker(self, w, k, decimal_tol=10):
-        """
-        Round a solution w to the relaxed problem, i.e. w \in [0,1]^m, |w| = k to a
-        solution to the original problem with w_i \in {0,1}. Ties between edges
-        are broken based on the original weight (all else being equal, we
-        prefer edges with larger weight).
-
-        w: A solution in the feasible set for the relaxed problem
-        k: The number of edges to select
-        decimal_tol: tolerance for determining floating point equality of weights w
-
-        returns w': A solution in the feasible set for the original problem
-        """
-        truncated_w = w.round(decimals=decimal_tol)
-        zipped_vals = np.array([(truncated_w[i], self.weights[i]) for i in range(len(w))], dtype=[('w', 'float'), ('weight', 'float')])
-        idx = np.argpartition(zipped_vals, -k, order=['w', 'weight'])[-k:]
-        rounded = np.zeros(len(w))
-        if k > 0:
-            rounded[idx] = 1.0
-        return rounded
-
-    def fw_subset(self, w_init, k, max_iters=5, duality_gap_tol=1e-8):
-        """
-        Use the Frank-Wolfe method to solve the subset selection problem,.
-
-        w_init: Array-like, must satisfy 0 <= w_i <= 1, |w| <= k
-        k: size of max allowed subset
-        max_iters: Maximum number of Frank-Wolfe iterations before returning
-        duality_gap_tol: Minimum duality gap (for early stopping)
+        Parameters
+        ----------
+        w_init : Array-like
+            Initial weights for the candidate edges, must satisfy 0 <= w_i <= 1, |w| <= k. This
+            is the starting point for the Frank-Wolfe algorithm. TODO(kevin): make optional
+        k : int
+            Number of edges to select.
+        rounding : str, optional
+            Rounding method to use. Options are "nearest" (default) and "madow"
+            (a random rounding procedure).
+        fallback : bool, optional
+            If True, fall back to the initialization if the rounded solution is worse.
+        max_iters: int, optional
+            Maximum number of iterations for the Frank-Wolfe algorithm.
+        relative_duality_gap_tol: float, optional
+            Tolerance for the relative duality gap, expressed as a fraction of
+            the function value. That is, if (upper - f)/f <
+            relative_duality_gap_tol, where "upper" is an upper bound on the
+            optimal value of 'f', the algorithm terminates.
+        grad_norm_tol: float, optional
+            Tolerance for the norm of the gradient. If the norm of the gradient
+            is less than this value, then the algorithm terminates.
+        random_rounding_max_iters: int, optional
+            Maximum number of iterations for the random rounding procedure.
+            This is only used if rounding="madow". If this is larger than 1,
+            then we will randomly round multiple times and return the best
+            solution (in terms of algebraic connectivity).
+        verbose: bool, optional
+            If True, print out information about the progress of the algorithm.
 
         returns a tuple (solution, unrounded, upper_bound) where
         solution: the (rounded) solution w \in {0,1}^m |w| = k
         unrounded: the solution obtained prior to rounding
         upper_bound: the value of the dual at the last iteration
+
         """
-        u_i = float("inf")
-        w_i = w_init
-        zeros = np.zeros(len(w_init))
-        obj_prev = None
-        for it in range(max_iters):
-            # Compute gradient
-            f_i, vec_i = self.evaluate_fiedler_pair(w_i)
-            grad_i = self.grad_from_fiedler(vec_i)
 
-            # Solve the direction-finding subproblem by maximizing the linear
-            # approximation of f at w_i
-            s_i = self.round_solution(grad_i, k)
+        if k >= len(self.weights):
+            # If the budget is larger than the number of candidate edges, then
+            # keep them all.
+            result = np.ones(len(self.weights))
+            if return_rounding_time:
+                return result, result, self.evaluate_objective(np.ones(len(self.weights))), 0.0
 
-            # Compute dual upper bound from linear approximation
-            # f_i = self.evaluate_objective(w_i)
-            u_i = min(u_i, f_i + grad_i @ (s_i - w_i))
+            return result, result, self.evaluate_objective(np.ones(len(self.weights)))
 
-            # If the duality gap is sufficiently small, we are done
-            if u_i - f_i < duality_gap_tol:
-                print("Duality gap tolerance reached, found optimal solution")
-                return self.round_solution_tiebreaker(w_i, k), w_i, u_i
-                # return self.simple_random_round(w_i, k), w_i
+        assert(len(w_init) == len(self.weights))
 
-            # Step size determination - naive method. No line search
-            alpha = 2.0 / (it + 2.0)
-            w_i = w_i + alpha * (s_i - w_i)
+        # Solution for the direction-finding subproblem
+        solve_lp = lambda g: fw.solve_subset_box_lp(g, k)
 
-        print("Reached maximum iterations")
-        return self.round_solution_tiebreaker(w_i, k), w_i, u_i
+        # Run Frank-Wolfe to solve the relaxation of subset constrained
+        # algebraic connectivity maximization
+        if self.use_cache:
+            w, u = fw.frank_wolfe_with_recycling(initial=w_init,
+                                                 problem=self.problem_with_recycling,
+                                                 solve_lp=solve_lp,
+                                                 maxiter=max_iters,
+                                                 relative_duality_gap_tol=relative_duality_gap_tol,
+                                                 grad_norm_tol=grad_norm_tol,
+                                                 verbose=verbose)
+        else:
+            w, u = fw.frank_wolfe(initial=w_init, problem=self.problem,
+                                  solve_lp=solve_lp, maxiter=max_iters,
+                                  relative_duality_gap_tol=relative_duality_gap_tol,
+                                  grad_norm_tol=grad_norm_tol,
+                                  verbose=verbose)
+
+        start = timer()
+        if rounding == "madow":
+            rounded = round_madow(w, k, value_fn=self.evaluate_objective, max_iters=random_rounding_max_iters)
+        else:
+            # rounding == "nearest"
+            rounded = round_nearest(w, k, weights=self.weights, break_ties_decimal_tol=10)
+        end = timer()
+        rounding_time = end - start
+
+        if fallback:
+            init_f = self.evaluate_objective(w_init)
+            rounded_f = self.evaluate_objective(rounded)
+
+            # If the rounded solution is worse than the initial solution, then
+            # return the initial solution instead.
+            if rounded_f < init_f:
+                rounded = w_init
+
+        # Return the rounded solution along with the unrounded solution and
+        # dual upper bound
+        if return_rounding_time:
+            return rounded, w, u, rounding_time
+
+        return rounded, w, u
