@@ -44,11 +44,14 @@ def frank_wolfe(initial,
 
     """
     if stepsize is None:
-        stepsize = lambda x, g, s, k: naive_stepsize(k)
+        stepsize = lambda x, g, s, k: naive_stepsize_careful(k)
 
     x = initial
     u = float("inf")
     for i in range(maxiter):
+        if verbose:
+            print(f"Iteration {i}/{maxiter}")
+            print(f"x: {x}")
         # Compute objective value and a (super)-gradient.
         f, gradf = problem(x)
 
@@ -124,6 +127,9 @@ def frank_wolfe_with_recycling(initial,
     u = float("inf")
     problem_data = None
     for i in range(maxiter):
+        if verbose:
+            print(f"Iteration {i}/{maxiter}")
+            print(f"x: {x}")
         # Compute objective value and a (super)-gradient.
         f, gradf, problem_data = problem(x, problem_data)
 
@@ -181,3 +187,6 @@ def solve_box_lp(g):
 
 def naive_stepsize(k):
     return 2.0 / (k + 2.0)
+
+def naive_stepsize_careful(k):
+    return 2.0 / (k + 3.0)
