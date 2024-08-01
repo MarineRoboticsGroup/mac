@@ -34,16 +34,22 @@ edges = nx_to_mac(G)
 fixed_meas, candidate_meas = split_edges(edges)
 edges = fixed_meas + candidate_meas
 
-pct_candidates = 0.4
-num_candidates = int(pct_candidates * len(candidate_meas))
+# pct_candidates = 0.4
+num_candidates = 0 # int(pct_candidates * len(candidate_meas))
 mac = MAC([], edges, n)
 greedy_eig = GreedyEig(fixed_meas, candidate_meas, n)
 greedy_esp = GreedyESP(fixed_meas, candidate_meas, n)
 
 w_init = np.zeros(len(fixed_meas) + len(candidate_meas))
 w_init[:(len(fixed_meas) + num_candidates)] = 1.0
+print(len(w_init))
+print(np.sum(w_init))
+print(len(fixed_meas))
+assert(np.sum(w_init) == (len(fixed_meas) + num_candidates))
 
-result, unrounded, upper = mac.fw_subset(w_init, len(fixed_meas) + num_candidates, max_iters=200, verbose=True, rounding="nearest")
+result, unrounded, upper = mac.fw_subset(w_init, len(fixed_meas) + num_candidates, max_iters=500, verbose=True, rounding="madow", random_rounding_max_iters=1)
+print(f"Duality gap: {upper- mac.evaluate_objective(unrounded)}")
+print(f"Suboptimality gap: {upper- mac.evaluate_objective(result)}")
 #greedy_eig_result, _ = greedy_eig.subset(num_candidates)
 #greedy_esp_result, _ = greedy_esp.subset(num_candidates)
 
