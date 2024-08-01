@@ -1,5 +1,5 @@
 # mac
-Maximizing algebraic connectivity for graph sparsification
+Maximizing algebraic connectivity for graph sparsification [[paper on arXiv](https://arxiv.org/abs/2403.19879)]
 
 MAC is an algorithm for solving the *maximum algebraic connectivity augmentation* problem. Specifically, given a graph containing a (potentially empty) set of "fixed" edges and a set of "candidate" edges, as well as a cardinality constraint K, MAC tries to find the set of K candidate edges whose addition to the fixed edges produces a graph with the largest possible [algebraic connectivity](https://en.wikipedia.org/wiki/Algebraic_connectivity). MAC does this by solving a convex relaxation of the maximum algebraic connectivity augmentation problem (which is itself NP-hard). The relaxation allows for "soft" inclusion of edges in the candidate set. When a solution to the relaxation is obtained, we _round_ it to the feasible set for the original problem.
 
@@ -113,13 +113,22 @@ You may also be able to install `scikit-sparse` entirely over `conda`. See these
 
 ## Reference
 
-If you found this code useful, please cite our paper [here](https://arxiv.org/abs/2203.13897):
+If you found this code useful, please cite our paper [here](https://arxiv.org/abs/2403.19879):
 ```bibtex
-@article{doherty2022spectral,
+@article{doherty2024mac,
+  title={M{AC}: {M}aximizing {A}lgebraic {C}onnectivity for {G}raph {S}parsification},
+  author={Doherty, Kevin and Papalia, Alan and Huang, Yewei and Rosen, David and Englot, Brendan and Leonard, John},
+  journal={arXiv preprint arXiv:2403.19879},
+  year={2024}
+}
+
+@inproceedings{doherty2022spectral,
   title={Spectral {M}easurement {S}parsification for {P}ose-{G}raph {SLAM}},
   author={Doherty, Kevin J and Rosen, David M and Leonard, John J},
-  journal={arXiv preprint arXiv:2203.13897},
-  year={2022}
+  booktitle={2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  pages={01--08},
+  year={2022},
+  organization={IEEE}
 }
 ```
 
