@@ -10,25 +10,18 @@ import numpy as np
 
 np.set_printoptions(precision=4)
 from mac.utils import (
-    select_edges,
-    split_edges,
-    nx_to_mac,
-    mac_to_nx,
     set_incidence_vector_for_edge_inplace,
     weight_reduced_graph_lap_from_edge_list,
     weight_graph_lap_from_edge_list
     )
-from mac.cholesky_utils import (
-    update_cholesky_factorization_inplace,
-    get_cholesky_forward_solve,
-    get_matrix_from_chol_factor_with_original_ordering,
-    find_fiedler_pair_cholesky,
-    CholeskyFiedlerSolver
-)
-from mac.fiedler import find_fiedler_pair
+
+from mac.utils.fiedler import find_fiedler_pair
 from scipy.sparse import spmatrix
 from sksparse.cholmod import cholesky, Factor, analyze, cholesky_AAt
 from .utils import get_split_petersen_graph, get_split_erdos_renyi_graph
+
+# Code under test
+from mac.utils.cholesky import *
 
 
 ORDERING_METHODS = ["natural", "best", "amd", "metis", "nesdis", "colamd", "default"]
