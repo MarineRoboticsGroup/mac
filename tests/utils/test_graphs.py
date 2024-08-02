@@ -32,10 +32,22 @@ class TestGraphUtils(unittest.TestCase):
 
     def test_weight_graph_lap_from_edge_list_weighted(self):
         edge_list = nx_to_mac(self.weighted_graph)
-        L_ours = weight_graph_lap_from_edge_list(edge_list, self.graph.number_of_nodes())
+        L_ours = weight_graph_lap_from_edge_list(edge_list, self.weighted_graph.number_of_nodes())
         L_nx = nx.laplacian_matrix(self.weighted_graph)
         self.assertTrue(np.allclose(L_ours.todense(), L_nx.todense()))
 
+    def test_weight_graph_lap_from_edges(self):
+        edge_list = nx_to_mac(self.weighted_graph)
+        edges = []
+        weights = []
+        for e in edge_list:
+            edges.append((e.i, e.j))
+            weights.append(e.weight)
+        edges = np.array(edges)
+        weights = np.array(weights)
+        L_ours = weight_graph_lap_from_edges(edges, weights, self.weighted_graph.number_of_nodes())
+        L_nx = nx.laplacian_matrix(self.weighted_graph)
+        self.assertTrue(np.allclose(L_ours.todense(), L_nx.todense()))
 
 if __name__ == '__main__':
     unittest.main()
