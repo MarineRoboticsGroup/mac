@@ -60,7 +60,11 @@ class MAC:
         self.laplacian_e_list = np.array(self.laplacian_e_list)
         self.weights = np.array(self.weights)
         self.edge_list = np.array(self.edge_list)
-        self.use_cache = use_cache
+
+        # Set up caching.
+        self.cache = None
+        if use_cache:
+            self.cache = Cache(Q=None)
 
         # Configuration for Fiedler vector computation
         self.fiedler_method = fiedler_method
