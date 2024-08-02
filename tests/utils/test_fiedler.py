@@ -15,6 +15,10 @@ class TestFiedlerUtils(unittest.TestCase):
     def setUp(self):
         return
 
+    def test_disconnected(self):
+        # Test multiple connected components
+        return
+
     def test_cache(self):
         return
 
