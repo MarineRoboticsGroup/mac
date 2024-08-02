@@ -1,4 +1,4 @@
-from mac.utils import round_nearest
+from mac.utils.rounding import round_nearest
 import numpy as np
 
 def solve_subset_box_lp(g, k):
@@ -24,6 +24,6 @@ def solve_box_lp(g):
     the positions of all nonnegative elements of g.
 
     """
-    solution = np.zeros_like(w)
+    solution = np.zeros_like(g)
     solution[g >= 0.0] = 1.0
     return solution

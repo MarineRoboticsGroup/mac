@@ -4,6 +4,9 @@ Utilities for maximizing concave functions over simple feasible sets with Frank-
 
 import numpy as np
 
+def naive_stepsize(k):
+    return 2.0 / (k + 2.0)
+
 def frank_wolfe(initial,
                 problem,
                 solve_lp,
@@ -65,7 +68,7 @@ def frank_wolfe(initial,
             return x, u
 
         # If the *relative* duality gap is sufficiently small, we are done.
-        if (u - f) / f < relative_duality_gap_tol:
+        if (u - f) / abs(f) < relative_duality_gap_tol:
             if verbose:
                 print("Duality gap tolerance reached, found optimal solution")
             return x, u
