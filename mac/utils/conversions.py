@@ -19,10 +19,14 @@ def nx_to_mac(G: nx.Graph) -> List[Edge]:
     for nxedge in G.edges():
         i = nxedge[0]
         j = nxedge[1]
+        data = G.get_edge_data(i, j)
+        weight = 1.0
+        if "weight" in data:
+            weight = data["weight"]
         if i < j:
-            edge = Edge(i, j, 1.0)
+            edge = Edge(i, j, weight)
         else:
-            edge = Edge(j, i, 1.0)
+            edge = Edge(j, i, weight)
         edges.append(edge)
     return edges
 

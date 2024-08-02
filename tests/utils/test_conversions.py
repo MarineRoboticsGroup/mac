@@ -1,7 +1,7 @@
 """
 Copyright 2023 MIT Marine Robotics Group
 
-Tests for Fiedler utilities
+Tests for graph type conversion utilities
 
 Author: Kevin Doherty
 """
@@ -42,12 +42,26 @@ class TestConversionsUtils(unittest.TestCase):
                              Edge(6, 9, weight=1),
                              Edge(7, 9, weight=1)]
 
+        self.weighted_graph = nx.petersen_graph()
+        rng = np.random.default_rng(seed=7)
+        weights = rng.random(self.weighted_graph.number_of_edges())
+        for i, e in enumerate(self.weighted_graph.edges()):
+            self.weighted_graph[e[0]][e[1]]['weight'] = weights[i]
+
     def test_mac_to_mac_via_nx(self):
         mac_to_mac_via_nx = nx_to_mac(mac_to_nx(self.petersen_mac))
         self.assertTrue(edges_equal(mac_to_mac_via_nx, self.petersen_mac))
 
     def test_nx_to_mac_equals_mac(self):
         self.assertTrue(edges_equal(nx_to_mac(self.petersen_nx), self.petersen_mac))
+
+    def test_nx_to_nx_via_mac_weighted(self):
+        nx_to_nx_via_mac = mac_to_nx(nx_to_mac(self.weighted_graph.copy()))
+
+        # We need to overwrite the name of the graph or the NetworkX graphs_equal utility
+        # will not recognize these graphs as equal.
+        nx_to_nx_via_mac.name = self.weighted_graph.name
+        self.assertTrue(nx.utils.graphs_equal(nx_to_nx_via_mac, self.weighted_graph))
 
 if __name__ == '__main__':
     unittest.main()
