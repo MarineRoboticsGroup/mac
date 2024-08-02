@@ -2,6 +2,8 @@ from mac.utils import *
 import mac.fiedler as fiedler
 import mac.frankwolfe as fw
 from timeit import default_timer as timer
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import networkx as nx
@@ -11,6 +13,11 @@ import matplotlib.pyplot as plt
 from scipy.sparse import csc_matrix, csr_matrix
 
 from timeit import default_timer as timer
+
+@dataclass
+class Cache:
+    """Problem data cache"""
+    Q: Optional[np.ndarray] = None
 
 class MAC:
     def __init__(self, fixed_edges, candidate_edges, num_nodes,
@@ -79,74 +86,48 @@ class MAC:
         L_x = self.L_fixed + L_candidate
         return L_x
 
-    def find_fiedler_pair(self, w):
+    def evaluate_objective(self, x):
         """
-        Compute the second smallest eigenvalue of L(w) and corresponding
-        eigenvector using `method` and tolerance `tol`. This is just a helper
-        that constructs L(w) and calls `fiedler.find_fiedler_pair` on the
-        resulting matrix, passing along the arguments.
-
-        w: An element of [0,1]^m; this is the edge selection to use
-        method: Any method supported by NetworkX for computing algebraic
-        connectivity. See:
-        https://networkx.org/documentation/stable/reference/generated/networkx.linalg.algebraicconnectivity.algebraic_connectivity.html
-
-        returns a tuple (lambda_2(L(w)), v_2(L(w))) containing the Fiedler
-        value and corresponding vector.
-
-        """
-        L = self.laplacian(w)
-        if L.shape[0] == 0:
-            # If the graph is empty, then the Fiedler value is 0 and the
-            # Fiedler vector is empty.
-            return 0.0, np.array([])
-        return fiedler.find_fiedler_pair(L, self.fiedler_method, tol=self.fiedler_tol)
-
-    def evaluate_objective(self, w):
-        """
-        Compute lambda_2(L(w)) where L(w) is the Laplacian with edge i weighted
-        by w_i and lambda_2 is the second smallest eigenvalue (this is the
+        Compute lambda_2(L(x)) where L(x) is the Laplacian with edge i weighted
+        by x_i*weight_i and lambda_2 is the second smallest eigenvalue (this is the
         algebraic connectivity).
 
-        w: Weights for each candidate edge (does not include fixed edges)
+        x: Weights for each candidate edge (does not include fixed edges)
 
-        returns F(w) = lambda_2(L(w)).
+        returns F(x) = lambda_2(L(x)).
         """
-        return self.find_fiedler_pair(w)[0]
-
-    def grad_from_fiedler(self, fiedler_vec):
-        """
-        Compute a (super)gradient of the algebraic connectivity with respect to w
-        from the Fiedler vector.
-
-        fiedler_vec: Eigenvector of the Laplacian corresponding to the second eigenvalue.
-
-        returns grad F(w) from equation (8) of our paper: https://arxiv.org/pdf/2203.13897.pdf.
-        """
-        return fiedler.grad_from_fiedler(fiedler_vec, self.edge_list, self.weights)
+        return fiedler.find_fiedler_pair(self.laplacian(x), method=self.fiedler_method, tol=self.fiedler_tol)[0]
 
     def problem(self, x):
-        f, fiedler_vec = self.find_fiedler_pair(x)
-        gradf = self.grad_from_fiedler(fiedler_vec)
-        return (f, gradf)
-
-    def problem_with_recycling(self, x, Q=None):
         """
-        Q is a set of recycled eigenvectors.
-        NOTE: experimental
-        """
-        f, fiedler_vec, Q = fiedler.find_fiedler_pair_and_eigvecs(self.combined_laplacian(x), X=Q, method=self.fiedler_method, tol=self.fiedler_tol)
-        gradf = self.grad_from_fiedler(fiedler_vec)
-        return f, gradf, Q
+        Compute the algebraic connectivity of L(x) and a (super)gradient of the algebraic connectivity with respect to x.
 
-    def fw_subset(self, w_init, k, rounding="nearest", fallback=False,
+        returns x, grad F(x).
+        """
+        Q = None if self.cache is None else self.cache.Q
+        fiedler_value, fiedler_vec, Qnew = fiedler.find_fiedler_pair(x, X=Q)
+
+        gradf = np.zeros(len(self.weights))
+        for k in range(len(self.weights)):
+            edge = self.edge_list[k] # get edge (i,j)
+            v_i = fiedler_vec[edge[0]]
+            v_j = fiedler_vec[edge[1]]
+            weight_k = self.weights[k]
+            kdelta = weight_k * (v_i - v_j)
+            gradf[k] = kdelta * (v_i - v_j)
+
+        if self.cache is not None:
+            self.cache.Q = Q
+        return f, gradf, cache
+
+    def solve(self, k, x_init=None, rounding="nearest", fallback=False,
                   max_iters=5, relative_duality_gap_tol=1e-4,
                   grad_norm_tol=1e-8, random_rounding_max_iters=1, verbose=False, return_rounding_time=False):
         """Use the Frank-Wolfe method to solve the subset selection problem,.
 
         Parameters
         ----------
-        w_init : Array-like
+        x_init : Array-like
             Initial weights for the candidate edges, must satisfy 0 <= w_i <= 1, |w| <= k. This
             is the starting point for the Frank-Wolfe algorithm. TODO(kevin): make optional
         k : int
@@ -195,10 +176,15 @@ class MAC:
         # Solution for the direction-finding subproblem
         solve_lp = lambda g: fw.solve_subset_box_lp(g, k)
 
+        # handle case where x is none
+
+        # Set up problem to use cache (or not)
+        # problem = lambda x: self.problem()
+
         # Run Frank-Wolfe to solve the relaxation of subset constrained
         # algebraic connectivity maximization
         if self.use_cache:
-            w, u = fw.frank_wolfe_with_recycling(initial=w_init,
+            w, u = fw.frank_wolfe_with_recycling(initial=x_init,
                                                  problem=self.problem_with_recycling,
                                                  solve_lp=solve_lp,
                                                  maxiter=max_iters,
@@ -206,7 +192,7 @@ class MAC:
                                                  grad_norm_tol=grad_norm_tol,
                                                  verbose=verbose)
         else:
-            w, u = fw.frank_wolfe(initial=w_init, problem=self.problem,
+            w, u = fw.frank_wolfe(initial=x_init, problem=self.problem,
                                   solve_lp=solve_lp, maxiter=max_iters,
                                   relative_duality_gap_tol=relative_duality_gap_tol,
                                   grad_norm_tol=grad_norm_tol,
@@ -222,7 +208,7 @@ class MAC:
         rounding_time = end - start
 
         if fallback:
-            init_f = self.evaluate_objective(w_init)
+            init_f = self.evaluate_objective(x_init)
             rounded_f = self.evaluate_objective(rounded)
 
             # If the rounded solution is worse than the initial solution, then
