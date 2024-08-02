@@ -181,18 +181,18 @@ def weight_reduced_graph_lap_from_edge_list(
 
 
 def weight_graph_lap_from_edges(
-    edges: List[Tuple[int, int]], weights: List[int], num_poses: int
+    edges: List[Tuple[int, int]], weights: List[int], num_nodes: int
 ) -> csr_matrix:
-    """Returns the sparse rotational weighted graph Laplacian matrix from a list
+    """Returns the weighted graph Laplacian matrix from a list
     of edges and edge weights
 
     Args:
         edges (List[Tuple[int, int]]): the list of edge indices (i,j)
         weights (List[float]): the list of edge weights
-        num_poses (int): the number of poses
+        num_nodes (int): the number of nodes
 
     Returns:
-        csr_matrix: the rotational weighted graph Laplacian matrix
+        csr_matrix: the weighted graph Laplacian matrix
     """
     assert len(edges) == len(weights)
     # Preallocate triplets
@@ -220,7 +220,7 @@ def weight_graph_lap_from_edges(
         cols.append(edges[i, 0])
         data.append(-weights[i])
 
-    return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_poses, num_poses]))
+    return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_nodes, num_nodes]))
 
 
 def split_edges(edges: List[Edge]) -> Tuple[List[Edge], List[Edge]]:

@@ -62,22 +62,22 @@ class MAC:
         # Truncate edges with selection weights below this threshold
         self.min_selection_weight_tol = min_selection_weight_tol
 
-    def combined_laplacian(self, w):
+    def laplacian(self, x):
         """
-        Construct the combined Laplacian (fixed edges plus candidate edges weighted by w).
+        Construct the combined Laplacian (fixed edges plus candidate edges weighted by x).
 
-        w: An element of [0,1]^m; this is the edge selection to use
+        x: An element of [0,1]^m; this is the edge selection to use
         tol: Tolerance for edges that are numerically zero. This improves speed
         in situations where edges are not *exactly* zero, but close enough that
         they have almost no influence on the graph.
 
         returns the matrix L(w)
         """
-        idx = np.where(w > self.min_selection_weight_tol)
-        prod = w[idx]*self.weights[idx]
-        C1 = weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_nodes)
-        C = self.L_fixed + C1
-        return C
+        idx = np.where(x > self.min_selection_weight_tol)
+        prod = x[idx]*self.weights[idx]
+        L_candidate = weight_graph_lap_from_edges(self.edge_list[idx], prod, self.num_nodes)
+        L_x = self.L_fixed + L_candidate
+        return L_x
 
     def find_fiedler_pair(self, w):
         """
@@ -95,7 +95,7 @@ class MAC:
         value and corresponding vector.
 
         """
-        L = self.combined_laplacian(w)
+        L = self.laplacian(w)
         if L.shape[0] == 0:
             # If the graph is empty, then the Fiedler value is 0 and the
             # Fiedler vector is empty.
