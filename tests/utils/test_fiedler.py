@@ -12,7 +12,6 @@ import networkx as nx
 
 from mac.utils.conversions import nx_to_mac
 from mac.utils.graphs import weight_graph_lap_from_edge_list
-import matplotlib.pyplot as plt
 
 # Code under test.
 from mac.utils.fiedler import *
