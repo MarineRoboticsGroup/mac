@@ -98,36 +98,6 @@ def weight_graph_lap_from_edges(
     return csr_matrix(coo_matrix((data, (rows, cols)), shape=[num_nodes, num_nodes]))
 
 
-def split_edges(edges: List[Edge]) -> Tuple[List[Edge], List[Edge]]:
-    """Splits list of edges into a "fixed" chain part and a set of candidate
-    loops.
-
-    Args:
-        edges: List of edges.
-
-    Returns:
-        A tuple containing two lists:
-            fixed: edges where |i - j| = 1, and
-            candidates: edges where |i - j| != 1
-
-    This is particularly useful for pose-graph SLAM applications where the
-    fixed edges correspond to an odometry chain and the candidate edges
-    correspond to loop closures.
-
-    """
-    chain_edges = []
-    loop_edges = []
-    for edge in edges:
-        id1 = edge.i
-        id2 = edge.j
-        if abs(id2 - id1) > 1:
-            loop_edges.append(edge)
-        else:
-            chain_edges.append(edge)
-
-    return chain_edges, loop_edges
-
-
 def select_edges(edges, w):
     """
     Select the subset of edges from `edges` with weight equal to one in
