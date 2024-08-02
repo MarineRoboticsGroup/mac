@@ -14,12 +14,12 @@ from scipy.sparse import csc_matrix, csr_matrix
 
 from timeit import default_timer as timer
 
-@dataclass
-class Cache:
-    """Problem data cache"""
-    Q: Optional[np.ndarray] = None
-
 class MAC:
+    @dataclass
+    class Cache:
+        """Problem data cache"""
+        Q: Optional[np.ndarray] = None
+
     def __init__(self, fixed_edges, candidate_edges, num_nodes,
                 fiedler_method='tracemin_lu', fiedler_tol=1e-8,
                 min_selection_weight_tol=1e-10):
