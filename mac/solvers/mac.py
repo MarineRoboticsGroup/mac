@@ -21,7 +21,7 @@ class Cache:
 
 class MAC:
     def __init__(self, fixed_edges, candidate_edges, num_nodes,
-                fiedler_method='tracemin_lu', use_cache=False, fiedler_tol=1e-8,
+                fiedler_method='tracemin_lu', fiedler_tol=1e-8,
                 min_selection_weight_tol=1e-10):
         """Parameters
         ----------
@@ -36,8 +36,6 @@ class MAC:
             'tracemin_lu', 'tracemin_cholesky'. Default is 'tracemin_lu'. Using the
             'tracemin_cholesky' method is faster but requires SuiteSparse to be
             installed.
-        use_cache : bool, optional
-            Whether to cache the Fiedler vector and the gradient.
         fiedler_tol : float, optional
             Tolerance for computing the Fiedler vector and corresponding eigenvalue.
         min_edge_selection_tol : float, optional
@@ -47,24 +45,15 @@ class MAC:
             assert(len(fixed_edges) == len(candidate_edges) == 0)
         self.L_fixed = weight_graph_lap_from_edge_list(fixed_edges, num_nodes)
         self.num_nodes = num_nodes
-        self.laplacian_e_list = []
         self.weights = []
         self.edge_list = []
 
         for edge in candidate_edges:
-            laplacian_e = weight_graph_lap_from_edge_list([edge], num_nodes)
-            self.laplacian_e_list.append(laplacian_e)
             self.weights.append(edge.weight)
             self.edge_list.append((edge.i, edge.j))
 
-        self.laplacian_e_list = np.array(self.laplacian_e_list)
         self.weights = np.array(self.weights)
         self.edge_list = np.array(self.edge_list)
-
-        # Set up caching.
-        self.cache = None
-        if use_cache:
-            self.cache = Cache(Q=None)
 
         # Configuration for Fiedler vector computation
         self.fiedler_method = fiedler_method
@@ -102,13 +91,13 @@ class MAC:
         """
         return fiedler.find_fiedler_pair(self.laplacian(x), method=self.fiedler_method, tol=self.fiedler_tol)[0]
 
-    def problem(self, x):
+    def problem(self, x, cache=None):
         """
         Compute the algebraic connectivity of L(x) and a (super)gradient of the algebraic connectivity with respect to x.
 
         returns x, grad F(x).
         """
-        Q = None if self.cache is None else self.cache.Q
+        Q = None if cache is None else cache.Q
         fiedler_value, fiedler_vec, Qnew = fiedler.find_fiedler_pair(x, X=Q)
 
         gradf = np.zeros(len(self.weights))
@@ -120,13 +109,13 @@ class MAC:
             kdelta = weight_k * (v_i - v_j)
             gradf[k] = kdelta * (v_i - v_j)
 
-        if self.cache is not None:
-            self.cache.Q = Q
+        if cache is not None:
+            cache.Q = Q
         return f, gradf, cache
 
     def solve(self, k, x_init=None, rounding="nearest", fallback=False,
                   max_iters=5, relative_duality_gap_tol=1e-4,
-                  grad_norm_tol=1e-8, random_rounding_max_iters=1, verbose=False, return_rounding_time=False):
+                  grad_norm_tol=1e-8, random_rounding_max_iters=1, verbose=False, return_rounding_time=False, use_cache=False):
         """Use the Frank-Wolfe method to solve the subset selection problem,.
 
         Parameters
@@ -183,13 +172,16 @@ class MAC:
         # handle case where x is none
 
         # Set up problem to use cache (or not)
-        # problem = lambda x: self.problem()
+        cache = None
+        if use_cache:
+            cache = Cache()
+        problem = lambda x: self.problem(x, cache=cache)
 
         # Run Frank-Wolfe to solve the relaxation of subset constrained
         # algebraic connectivity maximization
         if self.use_cache:
             w, u = fw.frank_wolfe_with_recycling(initial=x_init,
-                                                 problem=self.problem_with_recycling,
+                                                 problem=problem,
                                                  solve_lp=solve_lp,
                                                  maxiter=max_iters,
                                                  relative_duality_gap_tol=relative_duality_gap_tol,
