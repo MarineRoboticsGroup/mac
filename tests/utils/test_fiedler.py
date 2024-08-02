@@ -9,10 +9,9 @@ Author: Kevin Doherty
 import unittest
 import numpy as np
 
-import mac.fiedler as fiedler
-from .utils import get_split_petersen_graph
+import mac.utils.fiedler import *
 
-class TestFiedler(unittest.TestCase):
+class TestFiedlerUtils(unittest.TestCase):
     def setUp(self):
         return
 
