@@ -30,7 +30,7 @@ class TestGraphUtils(unittest.TestCase):
         L_nx = nx.laplacian_matrix(self.graph)
         self.assertTrue(np.allclose(L_ours.todense(), L_nx.todense()))
 
-    def test_weight_graph_lap_from_edge_list_unweighted(self):
+    def test_weight_graph_lap_from_edge_list_weighted(self):
         edge_list = nx_to_mac(self.weighted_graph)
         L_ours = weight_graph_lap_from_edge_list(edge_list, self.graph.number_of_nodes())
         L_nx = nx.laplacian_matrix(self.weighted_graph)
