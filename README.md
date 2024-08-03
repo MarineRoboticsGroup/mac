@@ -116,7 +116,7 @@ You may also be able to install `scikit-sparse` entirely over `conda`. See these
 If you found this code useful, please cite our paper [here](https://arxiv.org/abs/2403.19879):
 ```bibtex
 @article{doherty2024mac,
-  title={M{AC}: {M}aximizing {A}lgebraic {C}onnectivity for {G}raph {S}parsification},
+  title={M{AC}: {G}raph {S}parsification by {M}aximizing {A}lgebraic {C}onnectivity},
   author={Doherty, Kevin and Papalia, Alan and Huang, Yewei and Rosen, David and Englot, Brendan and Leonard, John},
   journal={arXiv preprint arXiv:2403.19879},
   year={2024}
