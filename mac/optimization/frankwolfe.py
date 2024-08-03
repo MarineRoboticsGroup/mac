@@ -68,13 +68,12 @@ def frank_wolfe(initial,
             return x, u
 
         # If the *relative* duality gap is sufficiently small, we are done.
-        if (u - f) / abs(f) < relative_duality_gap_tol:
+        if (u - f) < relative_duality_gap_tol * abs(f):
             if verbose:
                 print("Duality gap tolerance reached, found optimal solution")
             return x, u
 
         x = x + stepsize(x, gradf, s, i) * (s - x)
-        pass
     if verbose:
         print("Reached maximum number of iterations, returning best solution")
     return x, u

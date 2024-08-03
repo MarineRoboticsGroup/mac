@@ -51,5 +51,26 @@ class TestSimpleQuadratic(unittest.TestCase):
         # We're willing to accept a pretty loose tolerance here.
         self.assertTrue(np.allclose(x, expected, atol=0.01))
 
+    def test_convergence_around_zero(self):
+        """
+        Ensure that we handle the case where f(x) \approx 0 correctly (e.g. avoid
+        division by zero).
+        """
+        # Create a simple concave objective function f(x) = -x^2 + 0.25 with gradf(x) = -2x.
+        problem = lambda x: (-np.inner(x,x) + 0.25, -2*x)
+
+        # Set up box constraints for the solver
+        solve_lp = solve_box_lp
+
+        # Set up an initialization with f(initial) = 0
+        N = 10
+        initial = np.zeros(N)
+        initial[0] = 0.5
+
+        # Solve
+        x, u = frank_wolfe(initial, problem, solve_lp)
+
+        self.assertTrue(np.allclose(x, np.zeros(N)))
+
 if __name__ == '__main__':
     unittest.main()
