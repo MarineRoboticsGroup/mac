@@ -1,6 +1,7 @@
 """
 Utilities for rounding solutions to convex optimization problems onto simple constraint sets.
 """
+
 import numpy as np
 
 def round_nearest(w, k, weights=None, break_ties_decimal_tol=None):
