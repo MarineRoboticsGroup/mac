@@ -1,18 +1,18 @@
-from mac.utils import *
-import mac.fiedler as fiedler
-import mac.frankwolfe as fw
-from timeit import default_timer as timer
-from dataclasses import dataclass
-from typing import Optional
-
 import numpy as np
 import networkx as nx
 import networkx.linalg as la
-import matplotlib.pyplot as plt
 
+from dataclasses import dataclass
+from typing import Optional
 from scipy.sparse import csc_matrix, csr_matrix
-
 from timeit import default_timer as timer
+
+from mac.utils.graphs import *
+from mac.utils.rounding import *
+
+import mac.utils.fiedler as fiedler
+import mac.optimization.frankwolfe as fw
+import mac.optimization.constraints as constraints
 
 class MAC:
     @dataclass
@@ -89,7 +89,7 @@ class MAC:
 
         returns F(x) = lambda_2(L(x)).
         """
-        return fiedler.find_fiedler_pair(self.laplacian(x), method=self.fiedler_method, tol=self.fiedler_tol)[0]
+        return fiedler.find_fiedler_pair(L=self.laplacian(x), method=self.fiedler_method, tol=self.fiedler_tol)[0]
 
     def problem(self, x, cache=None):
         """
@@ -98,7 +98,7 @@ class MAC:
         returns x, grad F(x).
         """
         Q = None if cache is None else cache.Q
-        fiedler_value, fiedler_vec, Qnew = fiedler.find_fiedler_pair(x, X=Q)
+        f, fiedler_vec, Qnew = fiedler.find_fiedler_pair(L=self.laplacian(x), X=Q)
 
         gradf = np.zeros(len(self.weights))
         for k in range(len(self.weights)):
@@ -111,7 +111,7 @@ class MAC:
 
         if cache is not None:
             cache.Q = Q
-        return f, gradf, cache
+        return f, gradf
 
     def solve(self, k, x_init=None, rounding="nearest", fallback=False,
                   max_iters=5, relative_duality_gap_tol=1e-4,
@@ -164,10 +164,10 @@ class MAC:
 
             return result, result, self.evaluate_objective(np.ones(len(self.weights)))
 
-        assert(len(w_init) == len(self.weights))
+        assert(len(x_init) == len(self.weights))
 
         # Solution for the direction-finding subproblem
-        solve_lp = lambda g: fw.solve_subset_box_lp(g, k)
+        solve_lp = lambda g: constraints.solve_subset_box_lp(g, k)
 
         # handle case where x is none
 
@@ -179,20 +179,11 @@ class MAC:
 
         # Run Frank-Wolfe to solve the relaxation of subset constrained
         # algebraic connectivity maximization
-        if self.use_cache:
-            w, u = fw.frank_wolfe_with_recycling(initial=x_init,
-                                                 problem=problem,
-                                                 solve_lp=solve_lp,
-                                                 maxiter=max_iters,
-                                                 relative_duality_gap_tol=relative_duality_gap_tol,
-                                                 grad_norm_tol=grad_norm_tol,
-                                                 verbose=verbose)
-        else:
-            w, u = fw.frank_wolfe(initial=x_init, problem=self.problem,
-                                  solve_lp=solve_lp, maxiter=max_iters,
-                                  relative_duality_gap_tol=relative_duality_gap_tol,
-                                  grad_norm_tol=grad_norm_tol,
-                                  verbose=verbose)
+        w, u = fw.frank_wolfe(initial=x_init, problem=problem,
+                                solve_lp=solve_lp, maxiter=max_iters,
+                                relative_duality_gap_tol=relative_duality_gap_tol,
+                                grad_norm_tol=grad_norm_tol,
+                                verbose=verbose)
 
         start = timer()
         if rounding == "madow":
