@@ -4,7 +4,6 @@ import networkx.linalg as la
 
 from dataclasses import dataclass
 from typing import Optional
-from scipy.sparse import csc_matrix, csr_matrix
 from timeit import default_timer as timer
 
 from mac.utils.graphs import *
@@ -41,13 +40,23 @@ class MAC:
         min_edge_selection_tol : float, optional
             Tolerance for the minimum edge selection weight. Default is 1e-10.
         """
-        if (num_nodes == 0):
-            assert(len(fixed_edges) == len(candidate_edges) == 0)
+        # Check that we at least *could* have a spanning tree in the set
+        # {fixed_edges U candidate_edges} This does not guarantee that a
+        # spanning tree exists, but it's a good basic test.
+        num_edges = len(fixed_edges) + len(candidate_edges)
+        assert (num_nodes - 1) <= num_edges
+
+        # We also check that there aren't "too many" edges. The number of edges
+        # in the complete graph K(n) is equal to n * (n - 1) / 2, so we cannot
+        # possibly have more edges than this.
+        assert num_edges <= 0.5 * num_nodes * (num_nodes - 1)
+
+        # Pre-compute the Laplacian for the subgraph comprised of the "fixed edges".
         self.L_fixed = weight_graph_lap_from_edge_list(fixed_edges, num_nodes)
         self.num_nodes = num_nodes
+
         self.weights = []
         self.edge_list = []
-
         for edge in candidate_edges:
             self.weights.append(edge.weight)
             self.edge_list.append((edge.i, edge.j))
@@ -63,15 +72,15 @@ class MAC:
         self.min_selection_weight_tol = min_selection_weight_tol
 
     def laplacian(self, x):
-        """
-        Construct the combined Laplacian (fixed edges plus candidate edges weighted by x).
-
+        """Construct the combined Laplacian (fixed edges plus candidate edges weighted by x).
         x: An element of [0,1]^m; this is the edge selection to use
-        tol: Tolerance for edges that are numerically zero. This improves speed
-        in situations where edges are not *exactly* zero, but close enough that
-        they have almost no influence on the graph.
 
-        returns the matrix L(w)
+        The tolerance parameter `min_selection_weight_tol` is used to prune out
+        edges that are numerically zero. This improves speed in situations
+        where edges are not *exactly* zero, but close enough that they have
+        almost no influence on the graph.
+
+        returns the matrix L(x)
         """
         idx = np.where(x > self.min_selection_weight_tol)
         prod = x[idx]*self.weights[idx]
@@ -89,11 +98,16 @@ class MAC:
 
         returns F(x) = lambda_2(L(x)).
         """
-        return fiedler.find_fiedler_pair(L=self.laplacian(x), method=self.fiedler_method, tol=self.fiedler_tol)[0]
+        return fiedler.find_fiedler_pair(L=self.laplacian(x),
+                                         method=self.fiedler_method, tol=self.fiedler_tol)[0]
 
     def problem(self, x, cache=None):
-        """
-        Compute the algebraic connectivity of L(x) and a (super)gradient of the algebraic connectivity with respect to x.
+        """Compute the algebraic connectivity of L(x) and a (super)gradient of the
+        algebraic connectivity with respect to x.
+
+        x: Weights for each candidate edge (does not include fixed edges)
+        cache: Mutable `Cache` object. If a `Cache` object is provided in the `cache` field, it will be used
+        and updated, but not explicitly returned. Rather, it will be updated directly.
 
         returns x, grad F(x).
         """
@@ -114,17 +128,18 @@ class MAC:
         return f, gradf
 
     def solve(self, k, x_init=None, rounding="nearest", fallback=False,
-                  max_iters=5, relative_duality_gap_tol=1e-4,
-                  grad_norm_tol=1e-8, random_rounding_max_iters=1, verbose=False, return_rounding_time=False, use_cache=False):
+              max_iters=5, relative_duality_gap_tol=1e-4,
+              grad_norm_tol=1e-8, random_rounding_max_iters=1,
+              verbose=False, return_rounding_time=False, use_cache=False):
         """Use the Frank-Wolfe method to solve the subset selection problem,.
 
         Parameters
         ----------
-        x_init : Array-like
-            Initial weights for the candidate edges, must satisfy 0 <= w_i <= 1, |w| <= k. This
-            is the starting point for the Frank-Wolfe algorithm. TODO(kevin): make optional
         k : int
             Number of edges to select.
+        x_init : optional, array-like
+            Initial weights for the candidate edges, must satisfy 0 <= w_i <= 1, |w| <= k. This
+            is the starting point for the Frank-Wolfe algorithm. TODO(kevin): make optional
         rounding : str, optional
             Rounding method to use. Options are "nearest" (default) and "madow"
             (a random rounding procedure).
