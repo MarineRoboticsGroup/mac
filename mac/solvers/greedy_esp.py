@@ -272,7 +272,7 @@ class GreedyESP:
         """A convenience function for subsets_lazy that only returns the result
         for a single budget. See subsets_lazy for more details.
         """
-        results, selected_edges, times = self.subsets_lazy([k], return_times=return_time, verbose=verbose)
+        results, selected_edges, times = self.subsets_lazy([k], verbose=verbose)
         res = results[0]
         time = times[0]
         return res, selected_edges, time

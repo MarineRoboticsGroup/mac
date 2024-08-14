@@ -71,45 +71,5 @@ class TestPetersenGraphConnected(unittest.TestCase):
                 # connectivity should be greater than initial guess""")
                 pass
 
-    @unittest.skip("Skipping, since this test will not pass [slight differences in eigvecs can change output]")
-    def test_cache(self):
-        # Get the Petersen graph
-        fixed_edges, candidate_edges, n = get_split_petersen_graph()
-
-        for pct_candidates in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-            with self.subTest(pct_candidates=pct_candidates):
-                num_candidates = int(pct_candidates * len(candidate_edges))
-
-                # Construct an initial guess
-                w_init = np.zeros(len(candidate_edges))
-                w_init[:num_candidates] = 1.0
-
-                mac = MAC(fixed_edges, candidate_edges, n)
-                mac_cache = MAC(fixed_edges, candidate_edges, n, use_cache=True)
-
-                result, unrounded, upper = mac.fw_subset(w_init, num_candidates, max_iters=100)
-                result_cache, unrounded_cache, upper_cache = mac_cache.fw_subset(w_init, num_candidates, max_iters=100)
-
-                self.assertTrue(np.allclose(unrounded, unrounded_cache), msg=f"""Cached MAC unrounded
-                result should be the same as non-cached result\n MAC: {unrounded} \n Cache: {unrounded_cache}""")
-
-                self.assertTrue(np.allclose(result, result_cache), msg=f"""Cached MAC result
-                should be the same as non-cached result\n MAC: {result} \n Cache: {result_cache}""")
-
-                self.assertTrue(np.allclose(upper, upper_cache), msg=f"""Cached MAC upper
-                result should be the same as non-cached result\n MAC: {upper} \n Cache: {upper_cache}""")
-
-                mac_unrounded_l2 = mac.evaluate_objective(unrounded)
-                mac_l2 = mac.evaluate_objective(result)
-
-                mac_cache_unrounded_l2 = mac.evaluate_objective(unrounded_cache)
-                mac_cache_l2 = mac.evaluate_objective(result_cache)
-
-                print("MAC Unrounded L2: {}".format(mac_unrounded_l2))
-                print("MAC Rounded L2: {}".format(mac_l2))
-
-                print("Cache MAC Unrounded L2: {}".format(mac_cache_unrounded_l2))
-                print("Cache MAC Rounded L2: {}".format(mac_cache_l2))
-
 if __name__ == '__main__':
     unittest.main()
