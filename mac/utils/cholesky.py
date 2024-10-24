@@ -107,7 +107,7 @@ class _CholeskySolver:
     """Cholesky factorization.
 
     To solve Ax = b:
-        solver = _LUSolver(A)
+        solver = _CholeskySolver(A)
         x = solver.solve(b)
 
     optional argument `tol` on solve method is ignored but included
