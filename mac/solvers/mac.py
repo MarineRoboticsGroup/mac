@@ -179,17 +179,16 @@ class MAC:
 
             return result, result, self.evaluate_objective(np.ones(len(self.weights)))
 
+        # TODO handle case where x is none
         assert(len(x_init) == len(self.weights))
 
         # Solution for the direction-finding subproblem
         solve_lp = lambda g: constraints.solve_subset_box_lp(g, k)
 
-        # handle case where x is none
-
         # Set up problem to use cache (or not)
         cache = None
         if use_cache:
-            cache = Cache()
+            cache = MAC.Cache()
         problem = lambda x: self.problem(x, cache=cache)
 
         # Run Frank-Wolfe to solve the relaxation of subset constrained
