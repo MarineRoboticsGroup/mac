@@ -1,11 +1,11 @@
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from mac.utils import select_edges, split_edges, nx_to_mac, mac_to_nx
-from mac.baseline import NaiveGreedy
-from mac.greedy_eig import GreedyEig
-from mac.greedy_esp import GreedyESP
-from mac.mac import MAC
+from mac.utils.graphs import select_edges
+from mac.utils.conversions import nx_to_mac, mac_to_nx
+from mac.solvers.greedy_eig import GreedyEig
+from mac.solvers.greedy_esp import GreedyESP
+from mac.solvers.mac import MAC
 
 plt.rcParams['text.usetex'] = True
 
@@ -30,16 +30,21 @@ plt.show()
 fixed_edges = nx_to_mac(spanning_tree)
 candidate_edges = nx_to_mac(loop_graph)
 
-pct_candidates = 0.4
+pct_candidates = 0.6
 num_candidates = int(pct_candidates * len(candidate_edges))
+print(num_candidates)
 mac = MAC(fixed_edges, candidate_edges, n)
 greedy_eig = GreedyEig(fixed_edges, candidate_edges, n)
 greedy_esp = GreedyESP(fixed_edges, candidate_edges, n)
 
 w_init = np.zeros(len(candidate_edges))
-w_init[:num_candidates] = 1.0
+# Sample num_candidates indices at random without replacement
+rng = np.random.default_rng()
+random_selection = rng.choice(len(candidate_edges), size=num_candidates, replace=False)
+w_init[random_selection] = 1.0
+print(w_init)
 
-result, unrounded, upper = mac.fw_subset(w_init, num_candidates, max_iters=100, rounding="nearest")
+result, unrounded, upper = mac.solve(num_candidates, w_init, max_iters=100, rounding="nearest")
 greedy_eig_result, _ = greedy_eig.subset(num_candidates)
 greedy_esp_result, _ = greedy_esp.subset(num_candidates)
 

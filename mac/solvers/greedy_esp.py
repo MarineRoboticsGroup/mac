@@ -34,11 +34,10 @@ np.set_printoptions(precision=3, suppress=True)
 from scipy.sparse import csc_matrix
 from typing import List, Set, Tuple, Union, Optional
 import math
-from mac.utils import Edge, set_incidence_vector_for_edge_inplace
-from mac.cholesky_utils import (
+from mac.utils.graphs import *
+from mac.utils.cholesky import (
     update_cholesky_factorization_inplace,
     get_cholesky_forward_solve,
-    weight_reduced_graph_lap_from_edge_list,
 )
 
 def compute_weighted_effective_resistances(

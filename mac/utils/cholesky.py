@@ -1,5 +1,6 @@
+import math
 import numpy as np
-from mac.utils import *
+from mac.utils.graphs import *
 from scipy.sparse import csr_matrix, coo_matrix, csc_matrix
 from sksparse.cholmod import cholesky, Factor, analyze, cholesky_AAt, CholmodNotPositiveDefiniteError
 
