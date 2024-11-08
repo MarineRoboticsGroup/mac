@@ -1,10 +1,10 @@
-from mac.utils import *
+from mac.utils.graphs import *
 import numpy as np
 
 import networkx as nx
 import networkx.linalg as la
 
-from mac.cholesky_utils import CholeskyFiedlerSolver
+from mac.utils.cholesky import CholeskyFiedlerSolver
 
 class GreedyEig:
     def __init__(self, odom_measurements, lc_measurements, num_poses):

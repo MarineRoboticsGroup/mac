@@ -1,5 +1,6 @@
+import math
 import numpy as np
-from mac.utils import *
+from mac.utils.graphs import *
 from scipy.sparse import csr_matrix, coo_matrix, csc_matrix
 from sksparse.cholmod import cholesky, Factor, analyze, cholesky_AAt, CholmodNotPositiveDefiniteError
 
@@ -107,7 +108,7 @@ class _CholeskySolver:
     """Cholesky factorization.
 
     To solve Ax = b:
-        solver = _LUSolver(A)
+        solver = _CholeskySolver(A)
         x = solver.solve(b)
 
     optional argument `tol` on solve method is ignored but included

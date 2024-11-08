@@ -1,62 +1,64 @@
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from mac.utils import select_edges, split_edges, nx_to_mac, mac_to_nx
-from mac.baseline import NaiveGreedy
-from mac.greedy_eig import GreedyEig
-from mac.greedy_esp import GreedyESP
-from mac.greedy_esp_minimal import MinimalGreedyESP
-from mac.mac import MAC
+from mac.utils.graphs import select_edges
+from mac.utils.conversions import nx_to_mac, mac_to_nx
+from mac.solvers.greedy_eig import GreedyEig
+from mac.solvers.greedy_esp import GreedyESP
+from mac.solvers.mac import MAC
 
 plt.rcParams['text.usetex'] = True
 
 G = nx.petersen_graph()
 n = len(G.nodes())
 
-# Add a chain
-for i in range(n-1):
-    if G.has_edge(i+1, i):
-        G.remove_edge(i+1, i)
-    if not G.has_edge(i, i+1):
-        G.add_edge(i, i+1)
-
 print(G)
-pos = nx.shell_layout(G, nlist=[range(5,10), range(5)])
+pos = nx.shell_layout(G, nlist=[range(5,10), range(5)], rotate=np.pi/32)
 nx.draw(G, pos=pos)
 plt.show()
 
 # Ensure G is connected before proceeding
 assert(nx.is_connected(G))
 
-edges = nx_to_mac(G)
+# Split the graph into a tree part and a "loop" part
+spanning_tree = nx.minimum_spanning_tree(G)
+loop_graph = nx.difference(G, spanning_tree)
 
-# Split chain and non-chain parts
-fixed_meas, candidate_meas = split_edges(edges)
+nx.draw(spanning_tree, pos=pos)
+plt.show()
 
-pct_candidates = 0.4
-num_candidates = int(pct_candidates * len(candidate_meas))
-mac = MAC(fixed_meas, candidate_meas, n)
-greedy_eig = GreedyEig(fixed_meas, candidate_meas, n)
-greedy_esp = GreedyESP(fixed_meas, candidate_meas, n)
+fixed_edges = nx_to_mac(spanning_tree)
+candidate_edges = nx_to_mac(loop_graph)
 
-w_init = np.zeros(len(candidate_meas))
-w_init[:num_candidates] = 1.0
+pct_candidates = 0.6
+num_candidates = int(pct_candidates * len(candidate_edges))
+print(num_candidates)
+mac = MAC(fixed_edges, candidate_edges, n)
+greedy_eig = GreedyEig(fixed_edges, candidate_edges, n)
+greedy_esp = GreedyESP(fixed_edges, candidate_edges, n)
 
-result, unrounded, upper = mac.fw_subset(w_init, num_candidates, max_iters=100)
+w_init = np.zeros(len(candidate_edges))
+# Sample num_candidates indices at random without replacement
+rng = np.random.default_rng()
+random_selection = rng.choice(len(candidate_edges), size=num_candidates, replace=False)
+w_init[random_selection] = 1.0
+print(w_init)
+
+result, unrounded, upper = mac.solve(num_candidates, w_init, max_iters=100, rounding="nearest")
 greedy_eig_result, _ = greedy_eig.subset(num_candidates)
 greedy_esp_result, _ = greedy_esp.subset(num_candidates)
 
-init_selected = select_edges(candidate_meas, w_init)
-init_selected_G = mac_to_nx(fixed_meas + init_selected)
+init_selected = select_edges(candidate_edges, w_init)
+init_selected_G = mac_to_nx(fixed_edges + init_selected)
 
-greedy_eig_selected = select_edges(candidate_meas, greedy_eig_result)
-greedy_eig_selected_G = mac_to_nx(fixed_meas + greedy_eig_selected)
+greedy_eig_selected = select_edges(candidate_edges, greedy_eig_result)
+greedy_eig_selected_G = mac_to_nx(fixed_edges + greedy_eig_selected)
 
-greedy_esp_selected = select_edges(candidate_meas, greedy_esp_result)
-greedy_esp_selected_G = mac_to_nx(fixed_meas + greedy_esp_selected)
+greedy_esp_selected = select_edges(candidate_edges, greedy_esp_result)
+greedy_esp_selected_G = mac_to_nx(fixed_edges + greedy_esp_selected)
 
-selected = select_edges(candidate_meas, result)
-selected_G = mac_to_nx(fixed_meas + selected)
+selected = select_edges(candidate_edges, result)
+selected_G = mac_to_nx(fixed_edges + selected)
 
 print(f"lambda2 Random: {mac.evaluate_objective(w_init)}")
 print(f"lambda2 Ours: {mac.evaluate_objective(result)}")

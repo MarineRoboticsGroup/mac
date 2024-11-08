@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix, coo_matrix
 from typing import List, Tuple, Union
 import networkx as nx
-from mac.utils import Edge
+from mac.utils.graphs import Edge
 
 from evo.core.trajectory import PoseTrajectory3D
 from evo.core import sync
@@ -14,6 +14,36 @@ from evo.core.metrics import PoseRelation, Unit
 # Container for SE-Sync-style relative pose measurements
 RelativePoseMeasurement = namedtuple('RelativePoseMeasurement',
                                      ['i', 'j', 't', 'R', 'kappa', 'tau'])
+
+def split_edges(edges: List[Edge]) -> Tuple[List[Edge], List[Edge]]:
+    """Splits list of edges into a "fixed" chain part and a set of candidate
+    loops.
+
+    Args:
+        edges: List of edges.
+
+    Returns:
+        A tuple containing two lists:
+            fixed: edges where |i - j| = 1, and
+            candidates: edges where |i - j| != 1
+
+    This is particularly useful for pose-graph SLAM applications where the
+    fixed edges correspond to an odometry chain and the candidate edges
+    correspond to loop closures.
+
+    """
+    chain_edges = []
+    loop_edges = []
+    for edge in edges:
+        id1 = edge.i
+        id2 = edge.j
+        if abs(id2 - id1) > 1:
+            loop_edges.append(edge)
+        else:
+            chain_edges.append(edge)
+
+    return chain_edges, loop_edges
+
 
 def rot2D_from_theta(theta: float) -> np.ndarray:
     """
