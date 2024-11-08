@@ -47,11 +47,9 @@ Now you are ready to use MAC.
 
 You can run unit and regression tests for MAC by simply running:
 ```bash
-python3 -m unittest
+pytest
 ```
-from the project root directory.
-
-**Note**: Many tests do use scikit-sparse, which is not installed by default. You can see some instructions on how to install it in the [Baseline methods](#baseline-methods) section.
+from the project root directory. This will also run any benchmarks in the test directory.
 
 ## Running the examples
 
