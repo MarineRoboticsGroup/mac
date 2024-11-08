@@ -6,7 +6,7 @@ from timeit import default_timer as timer
 from pose_graph_utils import split_edges, read_g2o_file, plot_poses, rpm_to_mac, RelativePoseMeasurement, poses_ate_tran, poses_rpe_rot
 
 # MAC requirements
-from mac.solvers import MAC, NaiveGreedy, GreedyESP
+from mac.solvers import MAC, NaiveGreedy
 from mac.utils.graphs import Edge
 from mac.utils.rounding import round_madow
 
@@ -272,6 +272,7 @@ if __name__ == '__main__':
 
     # Make a GreedyEig Solver
     if run_greedy:
+        from mac.solvers.greedy_esp import GreedyESP
         greedy_esp = GreedyESP(odom_edges, lc_edges, num_poses, lazy=True)
 
     #############################
@@ -334,14 +335,8 @@ if __name__ == '__main__':
         # point solution every time.
         madow_times.append(solve_time + (end - start) - rtime)
 
-    # Solve the relaxed maximum algebraic connectivity augmentation problem.
+    # Solve the greedy k-edge selection problem
     if run_greedy:
-        # start = timer()
-        # greedy_eig_result, _ = greedy_eig.subset(num_lc)
-        # end = timer()
-        # greedy_eig_times.append(end - start)
-        # greedy_eig_results.append(greedy_eig_result)
-
         num_lcs = [int(pct_lc * len(lc_measurements)) for pct_lc in percent_lc]
         greedy_esp_results, _, greedy_esp_times = greedy_esp.subsets_lazy(num_lcs, verbose=True)
         pass
