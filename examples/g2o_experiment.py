@@ -3,14 +3,12 @@ import random
 import numpy as np
 import networkx as nx
 from timeit import default_timer as timer
-from pose_graph_utils import read_g2o_file, plot_poses, rpm_to_mac, RelativePoseMeasurement, poses_ate_tran, poses_rpe_rot
+from pose_graph_utils import split_edges, read_g2o_file, plot_poses, rpm_to_mac, RelativePoseMeasurement, poses_ate_tran, poses_rpe_rot
 
 # MAC requirements
-from mac import MAC
-from mac.baseline import NaiveGreedy
-from mac.greedy_eig import GreedyEig
-from mac.greedy_esp import GreedyESP
-from mac.utils import split_edges, Edge, round_madow
+from mac.solvers import MAC, NaiveGreedy, GreedyESP
+from mac.utils.graphs import Edge
+from mac.utils.rounding import round_madow
 
 import matplotlib.pyplot as plt
 plt.rcParams['text.usetex'] = True
@@ -267,14 +265,13 @@ if __name__ == '__main__':
     #     pass
 
     # Make a MAC Solver
-    mac = MAC(odom_edges, lc_edges, num_poses, use_cache=True, fiedler_method="tracemin_cholesky")
+    mac = MAC(odom_edges, lc_edges, num_poses, fiedler_method="tracemin_cholesky")
 
     # Make a Naive Solver
     naive = NaiveGreedy(lc_edges)
 
     # Make a GreedyEig Solver
     if run_greedy:
-        # greedy_eig = GreedyEig(rpm_to_mac(odom_measurements), rpm_to_mac(lc_measurements), num_poses)
         greedy_esp = GreedyESP(odom_edges, lc_edges, num_poses, lazy=True)
 
     #############################
@@ -318,7 +315,7 @@ if __name__ == '__main__':
 
         # Solve the relaxed maximum algebraic connectivity augmentation problem.
         start = timer()
-        result, unrounded, upper, rtime = mac.fw_subset(w_init, num_lc, max_iters=20, rounding="nearest", return_rounding_time=True)
+        result, unrounded, upper, rtime = mac.solve(num_lc, w_init, max_iters=20, rounding="nearest", return_rounding_time=True, use_cache=True)
         end = timer()
         solve_time = end - start
         times.append(solve_time)

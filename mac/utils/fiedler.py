@@ -36,7 +36,7 @@ def find_fiedler_pair(L, X=None, method='tracemin_lu', tol=1e-8, seed=None):
     assert X.shape[1] == q
 
     if method == 'tracemin_cholesky':
-        from mac.cholesky_utils import tracemin_fiedler_cholesky
+        from mac.utils.cholesky import tracemin_fiedler_cholesky
         sigma, X = tracemin_fiedler_cholesky(L=L, X=X, normalized=False, tol=tol)
     else:
         sigma, X = la.algebraicconnectivity._tracemin_fiedler(L=L, X=X, normalized=False, tol=tol, method=method)

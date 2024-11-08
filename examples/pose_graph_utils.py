@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix, coo_matrix
 from typing import List, Tuple, Union
 import networkx as nx
-from mac.utils import Edge
+from mac.utils.graphs import Edge
 
 from evo.core.trajectory import PoseTrajectory3D
 from evo.core import sync
