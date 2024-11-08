@@ -99,7 +99,10 @@ to run MAC for pose graph sparsification and compute SLAM solutions. Several plo
 
 ### Baseline methods
 
-The GreedyESP (Khosoussi et al. 2019) baseline requires scikit-sparse, which in turn requires SuiteSparse. On a Mac, this can be installed with:
+The GreedyESP (Khosoussi et al. 2019) baseline requires scikit-sparse, which in turn requires SuiteSparse. You can install SuiteSparse and scikit-sparse as follows, depending on your operating system:
+
+#### MacOS installation
+On a Mac, you can install SuiteSparse via `brew` by running:
 ```bash
 brew install suite-sparse
 ```
@@ -109,6 +112,14 @@ You then need to explicitly provide the path to suite-sparse in your call to pip
 SUITESPARSE_INCLUDE_DIR=/usr/local/Cellar/suite-sparse/7.0.1/include SUITESPARSE_LIBRARY_DIR=/usr/local/Cellar/suite-sparse/7.0.1/lib pip3 install scikit-sparse
 ```
 
+#### Linux installation
+On Linux, you can simply run:
+```bash
+sudo apt-get install python-scipy libsuitesparse-dev
+pip install --user scikit-sparse
+```
+
+#### Conda
 You may also be able to install `scikit-sparse` entirely over `conda`. See these [instructions](https://scikit-sparse.readthedocs.io/en/latest/overview.html#installation) for more details.
 
 ## Reference
